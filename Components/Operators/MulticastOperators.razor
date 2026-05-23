@@ -1,0 +1,449 @@
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="section-title">
+	<span class="tag tag-multicast">Multicast</span> Multicasting Operators
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			By default, every subscriber to a cold observable gets its <em>own</em>
+			independent execution. Multicast operators convert a cold observable into
+			a <strong>hot, shared</strong> one — all subscribers receive the same
+			emissions from a single upstream execution.
+		</p>
+	</div>
+</div>
+
+<div class="operator-grid">
+
+	<!-- ── Publish / Connect ──────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-multicast">Multicast</span>
+			<span class="operator-name">Publish / Connect</span>
+		</div>
+		<p class="operator-desc">
+			<code>Publish()</code> wraps the source in an
+			<code>IConnectableObservable&lt;T&gt;</code>. Subscribers attach but
+			nothing runs until you call <code>Connect()</code>. All subscribers then
+			receive the same values from one upstream execution.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Share one execution among multiple subscribers</span></div>
+			<pre><code class="language-csharp">var source = Observable.Interval(TimeSpan.FromMilliseconds(200))
+					   .Take(5)
+					   .Publish();   // cold → connectable
+
+// Attach two subscribers before connecting
+source.Subscribe(v =&gt; Console.WriteLine($"Sub A: {v}"));
+source.Subscribe(v =&gt; Console.WriteLine($"Sub B: {v}"));
+
+// Both receive identical values from a single Interval execution
+var connection = source.Connect();
+
+// ...later, disconnect
+connection.Dispose();</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunPublish" disabled="@_pubRunning">
+				@if (_pubRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_pubOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_pubOut)</div>
+		</div>
+	</div>
+
+	<!-- ── PublishLast ────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-multicast">Multicast</span>
+			<span class="operator-name">PublishLast</span>
+		</div>
+		<p class="operator-desc">
+			Like <code>Publish</code>, but remembers only the <em>last</em> value and
+			delivers it to any subscriber that joins — even <em>after</em> the sequence
+			has completed. Ideal for caching the result of a long-running async call.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Cache and replay the final value to late subscribers</span></div>
+			<pre><code class="language-csharp">var asyncOp = Observable.FromAsync(() =&gt; ExpensiveApiCallAsync())
+						.PublishLast();
+
+asyncOp.Connect();  // start the operation
+
+// First subscriber — arrives while running
+asyncOp.Subscribe(r =&gt; Console.WriteLine($"Sub1: {r}"));
+
+// Late subscriber — gets the cached result immediately
+await Task.Delay(3000);
+asyncOp.Subscribe(r =&gt; Console.WriteLine($"Sub2 (late): {r}"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunPublishLast" disabled="@_plRunning">
+				@if (_plRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_plOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_plOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Replay ─────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-multicast">Multicast</span>
+			<span class="operator-name">Replay</span>
+		</div>
+		<p class="operator-desc">
+			Caches a configurable number of past emissions (by count and/or time
+			window) and replays them to new subscribers. Backed by a
+			<code>ReplaySubject&lt;T&gt;</code> internally.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Replay past values to late subscribers</span></div>
+			<pre><code class="language-csharp">// Replay all values
+var replayAll = Observable.Range(1, 5).Replay();
+replayAll.Connect();
+
+await Task.Delay(200);  // source is already done
+
+// Late subscriber still gets all 5 values
+replayAll.Subscribe(Console.WriteLine);  // 1, 2, 3, 4, 5
+
+// Buffer only the last 2 values
+var replayTwo = ticker.Replay(bufferSize: 2);
+replayTwo.Connect();
+
+// Buffer a 1-second sliding window
+var replayWindow = ticker.Replay(TimeSpan.FromSeconds(1));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunReplay" disabled="@_repRunning">
+				@if (_repRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_repOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_repOut)</div>
+		</div>
+	</div>
+
+	<!-- ── RefCount / AutoConnect ─────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-multicast">Multicast</span>
+			<span class="operator-name">RefCount / AutoConnect</span>
+		</div>
+		<p class="operator-desc">
+			<code>RefCount()</code> turns a connectable observable into a
+			regular observable that connects automatically when the first subscriber
+			arrives and disconnects when the last unsubscribes.
+			<code>AutoConnect(n)</code> connects after <em>n</em> subscribers attach
+			and never disconnects.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Automatic connect/disconnect lifecycle</span></div>
+			<pre><code class="language-csharp">// RefCount — connect on 1st subscriber, disconnect on last
+var shared = Observable.Interval(TimeSpan.FromMilliseconds(200))
+					   .Publish()
+					   .RefCount();
+
+var sub1 = shared.Subscribe(t =&gt; Console.WriteLine($"A: {t}"));
+var sub2 = shared.Subscribe(t =&gt; Console.WriteLine($"B: {t}"));
+
+// Upstream runs ONE Interval regardless of subscriber count
+
+sub1.Dispose();  // still running (sub2 is active)
+sub2.Dispose();  // upstream Interval is now disposed
+
+// AutoConnect — connect after 2 subscribers, stay connected forever
+var auto = Observable.Interval(TimeSpan.FromMilliseconds(200))
+					 .Publish()
+					 .AutoConnect(2);</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunRefCount" disabled="@_rcRunning">
+				@if (_rcRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_rcOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_rcOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Share ──────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-multicast">Multicast</span>
+			<span class="operator-name">Share (Publish + RefCount)</span>
+		</div>
+		<p class="operator-desc">
+			<code>Share()</code> (RxJS) is written as <code>.Publish().RefCount()</code>
+			in Rx.NET — it connects automatically when the first subscriber arrives and
+			disconnects when the last one leaves. The most common pattern for sharing a
+			cold observable without manually managing connect/disconnect.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>One-line hot sharing — Publish().RefCount() shorthand</span></div>
+			<pre><code class="language-csharp">// Without sharing: two subscribers → two independent HTTP calls
+var withoutShare = Observable.FromAsync(() =&gt; http.GetStringAsync(url));
+
+// With Publish().RefCount(): ONE HTTP call, forwarded to both subscribers
+var withShare = Observable.FromAsync(() =&gt; http.GetStringAsync(url))
+						  .Publish()
+						  .RefCount();
+
+withShare.Subscribe(s =&gt; ShowInPanel1(s));
+withShare.Subscribe(s =&gt; ShowInPanel2(s));
+// HTTP call made exactly once
+
+// Typical Blazor pattern: share an event stream component-wide
+_sharedKeyStream = keySubject.Publish().RefCount();
+_sharedKeyStream.Where(k =&gt; k == "Enter").Subscribe(OnEnter);
+_sharedKeyStream.Throttle(TimeSpan.FromMilliseconds(300)).Subscribe(Search);</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunShare" disabled="@_shareRunning">
+				@if (_shareRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_shareOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_shareOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Multicast (generic) ────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-multicast">Multicast</span>
+			<span class="operator-name">Multicast</span>
+		</div>
+		<p class="operator-desc">
+			The low-level building block: <code>Multicast(subject)</code> uses any
+			<code>ISubject&lt;T&gt;</code> as the shared backbone.
+			<code>Publish</code>, <code>Replay</code>, and <code>PublishLast</code>
+			are all built on top of <code>Multicast</code> with their respective
+			subjects.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Custom subject as the multicast backbone</span></div>
+			<pre><code class="language-csharp">// Publish() = Multicast(new Subject&lt;T&gt;())
+var s1 = source.Publish();
+var s2 = source.Multicast(new Subject&lt;int&gt;());  // equivalent
+
+// Replay(2) = Multicast(new ReplaySubject&lt;T&gt;(2))
+var r1 = source.Replay(2);
+var r2 = source.Multicast(new ReplaySubject&lt;int&gt;(2));  // equivalent
+
+// Custom: BehaviorSubject gives late subscribers the last value
+var b = source.Multicast(new BehaviorSubject&lt;int&gt;(0));
+b.Connect();
+// late subscriber immediately gets the current cached value
+b.Subscribe(Console.WriteLine);</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunMulticast" disabled="@_mcRunning">
+				@if (_mcRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_mcOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_mcOut)</div>
+		</div>
+	</div>
+
+</div>
+
+@code {
+	private record OutputLine(string Text, string Css);
+
+	private RenderFragment ConsoleBody(List<OutputLine> lines) => builder =>
+	{
+		if (lines.Count == 0)
+		{
+			builder.OpenElement(0, "div"); builder.AddAttribute(1, "class", "output-empty");
+			builder.AddContent(2, "Press Run to execute…"); builder.CloseElement();
+		}
+		else
+		{
+			int seq = 0;
+			foreach (var line in lines)
+			{
+				builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", $"output-line {line.Css}");
+				builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "output-prompt");
+				builder.AddContent(seq++, "›"); builder.CloseElement();
+				builder.OpenElement(seq++, "span"); builder.AddContent(seq++, line.Text); builder.CloseElement();
+				builder.CloseElement();
+			}
+		}
+	};
+
+	private void ClearOutput(List<OutputLine> list) { list.Clear(); StateHasChanged(); }
+	private void Add(List<OutputLine> list, string text, string css = "value") { list.Add(new(text, css)); StateHasChanged(); }
+
+	// Publish / Connect
+	private readonly List<OutputLine> _pubOut = []; private bool _pubRunning;
+	private async Task RunPublish()
+	{
+		_pubRunning = true; _pubOut.Clear(); StateHasChanged();
+		Add(_pubOut, "Two subscribers share ONE Interval(200ms) execution, 4 ticks…", "info");
+		var published = Observable.Interval(TimeSpan.FromMilliseconds(200)).Take(4).Publish();
+		published.Subscribe(v => Add(_pubOut, $"Sub A: tick {v}"));
+		published.Subscribe(v => Add(_pubOut, $"Sub B: tick {v}"));
+		var conn = published.Connect();
+		await Task.Delay(1000);
+		conn.Dispose();
+		Add(_pubOut, "Connected source disposed ✓", "complete");
+		_pubRunning = false; StateHasChanged();
+	}
+
+	// PublishLast
+	private readonly List<OutputLine> _plOut = []; private bool _plRunning;
+	private async Task RunPublishLast()
+	{
+		_plRunning = true; _plOut.Clear(); StateHasChanged();
+		Add(_plOut, "Running async operation via PublishLast…", "info");
+		var asyncOp = Observable.FromAsync(async () =>
+		{
+			Add(_plOut, "  [source] Simulating 300ms async call…", "info");
+			await Task.Delay(300);
+			return "Result-42";
+		}).PublishLast();
+		asyncOp.Subscribe(r => Add(_plOut, $"Sub1 (early): {r}"));
+		var conn = asyncOp.Connect();
+		await Task.Delay(500);
+		Add(_plOut, "Late subscriber joining after completion…", "info");
+		asyncOp.Subscribe(r => Add(_plOut, $"Sub2 (late):  {r} ← from cache"));
+		await Task.Delay(50);
+		conn.Dispose();
+		Add(_plOut, "PublishLast completed ✓", "complete");
+		_plRunning = false; StateHasChanged();
+	}
+
+	// Replay
+	private readonly List<OutputLine> _repOut = []; private bool _repRunning;
+	private async Task RunReplay()
+	{
+		_repRunning = true; _repOut.Clear(); StateHasChanged();
+		Add(_repOut, "— Replay() all 5 values to a late subscriber —", "info");
+		var replayAll = Observable.Range(1, 5).Replay();
+		var conn = replayAll.Connect();
+		await Task.Delay(50);  // source is done
+		Add(_repOut, "Source completed. Late subscriber now joins:", "info");
+		await replayAll.Do(v => Add(_repOut, $"Late: {v}")).ToList();
+		conn.Dispose();
+		Add(_repOut, "— Replay(bufferSize:2) — only last 2 values replayed —", "info");
+		var replay2 = Observable.Range(10, 5).Replay(2);
+		var conn2 = replay2.Connect();
+		await Task.Delay(50);
+		await replay2.Do(v => Add(_repOut, $"Buffer2: {v}")).ToList();
+		conn2.Dispose();
+		Add(_repOut, "Replay completed ✓", "complete");
+		_repRunning = false; StateHasChanged();
+	}
+
+	// RefCount
+	private readonly List<OutputLine> _rcOut = []; private bool _rcRunning;
+	private async Task RunRefCount()
+	{
+		_rcRunning = true; _rcOut.Clear(); StateHasChanged();
+		Add(_rcOut, "Shared source (Interval 200ms) with 2 subscribers via RefCount…", "info");
+		int execCount = 0;
+		var shared = Observable.Create<long>(obs =>
+		{
+			execCount++;
+			Add(_rcOut, $"  [upstream] Execution #{execCount} started", "info");
+			return Observable.Interval(TimeSpan.FromMilliseconds(200)).Subscribe(obs);
+		}).Publish().RefCount();
+
+		var sub1 = shared.Take(3).Subscribe(v => Add(_rcOut, $"Sub A: {v}"));
+		var sub2 = shared.Take(3).Subscribe(v => Add(_rcOut, $"Sub B: {v}"));
+		await Task.Delay(750);
+		sub1.Dispose(); sub2.Dispose();
+		Add(_rcOut, $"Upstream execution count: {execCount} (should be 1) ✓", "complete");
+		_rcRunning = false; StateHasChanged();
+	}
+
+	// Share
+	private readonly List<OutputLine> _shareOut = []; private bool _shareRunning;
+	private async Task RunShare()
+	{
+		_shareRunning = true; _shareOut.Clear(); StateHasChanged();
+		Add(_shareOut, "— Share() = Publish().RefCount() shorthand —", "info");
+		int callCount = 0;
+		var shared = Observable.FromAsync(async () =>
+		{
+			callCount++;
+			Add(_shareOut, $"  [source] Async call #{callCount} executing…", "info");
+			await Task.Delay(150);
+			return $"Value-{callCount}";
+		}).Publish().RefCount();
+		shared.Subscribe(v => Add(_shareOut, $"Panel 1: {v}"));
+		shared.Subscribe(v => Add(_shareOut, $"Panel 2: {v}"));
+		await Task.Delay(400);
+		Add(_shareOut, $"Total source executions: {callCount} (should be 1) ✓", "complete");
+		_shareRunning = false; StateHasChanged();
+	}
+
+	// Multicast
+	private readonly List<OutputLine> _mcOut = []; private bool _mcRunning;
+	private async Task RunMulticast()
+	{
+		_mcRunning = true; _mcOut.Clear(); StateHasChanged();
+		Add(_mcOut, "— Multicast(ReplaySubject(2)) — late subscriber gets last 2 —", "info");
+		var mc = Observable.Range(1, 5).Multicast(new System.Reactive.Subjects.ReplaySubject<int>(2));
+		var conn = mc.Connect();
+		await Task.Delay(50);
+		Add(_mcOut, "Late subscriber joining (sees only buffered 2):", "info");
+		await mc.Do(v => Add(_mcOut, $"Late: {v}")).ToList();
+		conn.Dispose();
+		Add(_mcOut, "— Multicast(BehaviorSubject(0)) — immediate current value —", "info");
+		var bs = new System.Reactive.Subjects.BehaviorSubject<int>(0);
+		var mc2 = Observable.Range(1, 3).Multicast(bs);
+		mc2.Connect();
+		await Task.Delay(50);
+		Add(_mcOut, "Subscribing after completion, BehaviorSubject holds last value:", "info");
+		mc2.Subscribe(v => Add(_mcOut, $"BehaviorSubject cached: {v}"));
+		await Task.Delay(50);
+		Add(_mcOut, "Multicast completed ✓", "complete");
+		_mcRunning = false; StateHasChanged();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender) await JS.InvokeVoidAsync("highlightCode");
+	}
+	public void Dispose() { }
+}

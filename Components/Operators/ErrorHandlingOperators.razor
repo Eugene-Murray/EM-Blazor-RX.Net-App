@@ -1,0 +1,437 @@
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="section-title">
+	<span class="tag tag-error">Error Handling</span> Handling Errors in Observables
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			An observable sequence terminates on <code>OnError</code>. Error-handling
+			operators let you intercept that signal, recover by switching to a fallback
+			stream, retry the source, or clean up with a <code>finally</code>-style hook.
+		</p>
+	</div>
+</div>
+
+<div class="operator-grid">
+
+	<!-- ── Catch ──────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-error">Error Handling</span>
+			<span class="operator-name">Catch</span>
+		</div>
+		<p class="operator-desc">
+			Intercepts an error and switches to a fallback observable, preventing the
+			error from reaching the subscriber. The fallback can inspect the exception
+			and return different sequences based on the error type.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Recover with a fallback stream</span></div>
+			<pre><code class="language-csharp">// Return a default value on any error
+Observable.Throw&lt;int&gt;(new Exception("boom"))
+		  .Catch(Observable.Return(-1))
+		  .Subscribe(Console.WriteLine);  // -1
+
+// Inspect the exception and choose recovery
+flakyStream
+	.Catch((HttpRequestException ex) =&gt;
+		ex.StatusCode == HttpStatusCode.NotFound
+			? Observable.Return(CachedResult)
+			: Observable.Throw&lt;Result&gt;(ex))
+	.Subscribe(result =&gt; Display(result));
+
+// Chain multiple fallbacks
+primarySource
+	.Catch(secondarySource)
+	.Catch(Observable.Return(defaultValue))
+	.Subscribe(Console.WriteLine);</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunCatch" disabled="@_catchRunning">
+				@if (_catchRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (2 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_catchOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_catchOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Retry ──────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-error">Error Handling</span>
+			<span class="operator-name">Retry</span>
+		</div>
+		<p class="operator-desc">
+			Re-subscribes to the source on error, up to <em>n</em> times (or
+			indefinitely). Without a retry count, a permanently failing source will
+			loop forever — always bound retries for production use.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Re-subscribe after failure</span></div>
+			<pre><code class="language-csharp">int attempt = 0;
+// Fails the first 2 times, succeeds on 3rd
+var flakySource = Observable.Defer(() =&gt;
+{
+	attempt++;
+	return attempt &lt; 3
+		? Observable.Throw&lt;string&gt;(new Exception($"Attempt {attempt} failed"))
+		: Observable.Return($"Success on attempt {attempt}");
+});
+
+flakySource
+	.Retry(3)
+	.Subscribe(
+		msg  =&gt; Console.WriteLine(msg),
+		err  =&gt; Console.WriteLine($"Gave up: {err.Message}"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunRetry" disabled="@_retryRunning">
+				@if (_retryRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_retryOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_retryOut)</div>
+		</div>
+	</div>
+
+	<!-- ── RetryWhen (exponential back-off) ───────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-error">Error Handling</span>
+			<span class="operator-name">RetryWhen (back-off strategy)</span>
+		</div>
+		<p class="operator-desc">
+			More powerful than <code>Retry</code>: you control the retry timing by
+			providing a selector over the error stream. Return a delayed observable to
+			implement exponential back-off; error or complete the notification stream
+			to propagate the error or stop retrying.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Exponential back-off with RetryWhen</span></div>
+			<pre><code class="language-csharp">int attempt = 0;
+var source = Observable.Defer(() =&gt;
+{
+	attempt++;
+	Console.WriteLine($"Try #{attempt}");
+	return attempt &lt; 4
+		? Observable.Throw&lt;string&gt;(new Exception("Transient"))
+		: Observable.Return("Done!");
+});
+
+source.RetryWhen(errors =&gt;
+	errors.Zip(Observable.Range(1, 3),   // max 3 retries
+			   (err, i) =&gt; i)
+		  .SelectMany(i =&gt;
+			  Observable.Timer(TimeSpan.FromMilliseconds(i * 200))))
+	  .Subscribe(Console.WriteLine,
+				 ex =&gt; Console.WriteLine($"Failed: {ex.Message}"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunRetryWhen" disabled="@_rwRunning">
+				@if (_rwRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (~1 s)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_rwOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_rwOut)</div>
+		</div>
+	</div>
+
+	<!-- ── OnErrorResumeNext ──────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-error">Error Handling</span>
+			<span class="operator-name">OnErrorResumeNext</span>
+		</div>
+		<p class="operator-desc">
+			Concatenates multiple sequences, silently swallowing any
+			<code>OnError</code> termination and moving straight to the next source.
+			Use when you want best-effort sequential execution and don't care about
+			individual failures.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Silently skip failed sequences and continue</span></div>
+			<pre><code class="language-csharp">var good1  = Observable.Return(1);
+var bad    = Observable.Throw&lt;int&gt;(new Exception("oops"));
+var good2  = Observable.Return(2);
+
+Observable.OnErrorResumeNext(good1, bad, good2)
+		  .Subscribe(
+			  v  =&gt; Console.WriteLine($"OnNext: {v}"),
+			  () =&gt; Console.WriteLine("All sequences consumed"));
+// OnNext: 1
+// OnNext: 2   ← bad was skipped silently
+// All sequences consumed</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunOnErrorResume" disabled="@_oernRunning">
+				@if (_oernRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_oernOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_oernOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Finally ────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-error">Error Handling</span>
+			<span class="operator-name">Finally</span>
+		</div>
+		<p class="operator-desc">
+			Runs a cleanup action when the sequence terminates — whether by
+			<code>OnCompleted</code>, <code>OnError</code>, or disposal. The Rx
+			equivalent of a <code>try/finally</code> block.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Guaranteed cleanup on any termination</span></div>
+			<pre><code class="language-csharp">// Runs cleanup regardless of success or error
+Observable.Range(1, 3)
+		  .Finally(() =&gt; Console.WriteLine("Cleanup ran"))
+		  .Subscribe(Console.WriteLine);
+// 1, 2, 3
+// Cleanup ran
+
+// Also runs on error
+Observable.Throw&lt;int&gt;(new Exception("oops"))
+		  .Finally(() =&gt; Console.WriteLine("Cleanup on error"))
+		  .Subscribe(_ =&gt; { }, ex =&gt; Console.WriteLine($"Error: {ex.Message}"));
+// Error: oops
+// Cleanup on error</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunFinally" disabled="@_finallyRunning">
+				@if (_finallyRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (2 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_finallyOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_finallyOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Using ──────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-error">Error Handling</span>
+			<span class="operator-name">Using</span>
+		</div>
+		<p class="operator-desc">
+			Creates a disposable resource that lives only as long as the subscription.
+			When the sequence terminates (for any reason), the resource is disposed.
+			This is the Rx equivalent of a <code>using</code> statement scoped to a
+			subscription's lifetime.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Tie resource lifetime to a subscription</span></div>
+			<pre><code class="language-csharp">// Resource is created per subscription and disposed on termination
+var query = Observable.Using(
+	() =&gt; new SomeExpensiveResource(),          // resource factory
+	resource =&gt; resource.GetDataStream());       // observable factory
+
+using var sub = query.Subscribe(Console.WriteLine);
+// SomeExpensiveResource is disposed when sub is disposed
+
+// Example with a CancellationTokenSource
+var download = Observable.Using(
+	() =&gt; new CancellationTokenSource(),
+	cts =&gt; Observable.FromAsync(() =&gt; http.GetStringAsync(url, cts.Token)));
+
+download.Subscribe(Console.WriteLine);</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunUsing" disabled="@_usingRunning">
+				@if (_usingRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_usingOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_usingOut)</div>
+		</div>
+	</div>
+
+</div>
+
+@code {
+	private record OutputLine(string Text, string Css);
+
+	private RenderFragment ConsoleBody(List<OutputLine> lines) => builder =>
+	{
+		if (lines.Count == 0)
+		{
+			builder.OpenElement(0, "div"); builder.AddAttribute(1, "class", "output-empty");
+			builder.AddContent(2, "Press Run to execute…"); builder.CloseElement();
+		}
+		else
+		{
+			int seq = 0;
+			foreach (var line in lines)
+			{
+				builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", $"output-line {line.Css}");
+				builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "output-prompt");
+				builder.AddContent(seq++, "›"); builder.CloseElement();
+				builder.OpenElement(seq++, "span"); builder.AddContent(seq++, line.Text); builder.CloseElement();
+				builder.CloseElement();
+			}
+		}
+	};
+
+	private void ClearOutput(List<OutputLine> list) { list.Clear(); StateHasChanged(); }
+	private void Add(List<OutputLine> list, string text, string css = "value") { list.Add(new(text, css)); StateHasChanged(); }
+
+	// Catch
+	private readonly List<OutputLine> _catchOut = []; private bool _catchRunning;
+	private async Task RunCatch()
+	{
+		_catchRunning = true; _catchOut.Clear(); StateHasChanged();
+		Add(_catchOut, "— Throw(\"boom\").Catch(Return(-1)) —", "info");
+		await Observable.Throw<int>(new Exception("boom")).Catch(Observable.Return(-1))
+			.Do(v => Add(_catchOut, $"OnNext: {v}")).ToList();
+		Add(_catchOut, "Completed ✓", "complete");
+		Add(_catchOut, "— Chain: primary fails → fallback —", "info");
+		var primary = Observable.Throw<string>(new Exception("primary down"));
+		var fallback = Observable.Return("fallback value");
+		await primary.Catch(fallback).Do(v => Add(_catchOut, $"OnNext: {v}")).ToList();
+		Add(_catchOut, "Fallback completed ✓", "complete");
+		_catchRunning = false; StateHasChanged();
+	}
+
+	// Retry
+	private readonly List<OutputLine> _retryOut = []; private bool _retryRunning;
+	private async Task RunRetry()
+	{
+		_retryRunning = true; _retryOut.Clear(); StateHasChanged();
+		Add(_retryOut, "— Flaky source: fails first 2 attempts, succeeds on 3rd —", "info");
+		int attempt = 0;
+		var flaky = Observable.Defer(() =>
+		{
+			attempt++;
+			Add(_retryOut, $"Attempt #{attempt}…", "info");
+			return attempt < 3
+				? Observable.Throw<string>(new Exception($"Attempt {attempt} failed"))
+				: Observable.Return($"Success on attempt {attempt}!");
+		});
+		await flaky.Retry(4).Do(v => Add(_retryOut, $"OnNext: {v}")).ToList();
+		Add(_retryOut, "Retry completed ✓", "complete");
+		_retryRunning = false; StateHasChanged();
+	}
+
+	// RetryWhen
+	private readonly List<OutputLine> _rwOut = []; private bool _rwRunning;
+	private async Task RunRetryWhen()
+	{
+		_rwRunning = true; _rwOut.Clear(); StateHasChanged();
+		Add(_rwOut, "— Exponential back-off (max 3 retries) —", "info");
+		int rwAttempt = 0;
+		var source = Observable.Defer(() =>
+		{
+			rwAttempt++;
+			Add(_rwOut, $"Try #{rwAttempt}…", "info");
+			return rwAttempt < 4
+				? Observable.Throw<string>(new Exception("Transient"))
+				: Observable.Return("Done!");
+		});
+		await source.RetryWhen(errors =>
+			errors.Zip(Observable.Range(1, 3), (err, i) => i)
+				  .SelectMany(i =>
+				  {
+					  Add(_rwOut, $"  waiting {i * 200}ms before retry…", "info");
+					  return Observable.Timer(TimeSpan.FromMilliseconds(i * 200));
+				  }))
+			.Do(v => Add(_rwOut, $"OnNext: {v}")).ToList();
+		Add(_rwOut, "RetryWhen completed ✓", "complete");
+		_rwRunning = false; StateHasChanged();
+	}
+
+	// OnErrorResumeNext
+	private readonly List<OutputLine> _oernOut = []; private bool _oernRunning;
+	private async Task RunOnErrorResume()
+	{
+		_oernRunning = true; _oernOut.Clear(); StateHasChanged();
+		var good1 = Observable.Return(1);
+		var bad   = Observable.Throw<int>(new Exception("oops"));
+		var good2 = Observable.Return(2);
+		await Observable.OnErrorResumeNext(good1, bad, good2)
+			.Do(v => Add(_oernOut, $"OnNext: {v}")).ToList();
+		Add(_oernOut, "All sequences consumed ✓ (bad sequence skipped silently)", "complete");
+		_oernRunning = false; StateHasChanged();
+	}
+
+	// Finally
+	private readonly List<OutputLine> _finallyOut = []; private bool _finallyRunning;
+	private async Task RunFinally()
+	{
+		_finallyRunning = true; _finallyOut.Clear(); StateHasChanged();
+		Add(_finallyOut, "— Range(1,3).Finally(cleanup) —", "info");
+		await Observable.Range(1, 3)
+			.Finally(() => Add(_finallyOut, "→ Finally cleanup ran ✓", "complete"))
+			.Do(v => Add(_finallyOut, $"OnNext: {v}")).ToList();
+		await Task.Delay(60);
+		Add(_finallyOut, "— Throw.Finally(cleanup on error) —", "info");
+		try
+		{
+			await Observable.Throw<int>(new Exception("oops"))
+				.Finally(() => Add(_finallyOut, "→ Finally cleanup ran on error ✓", "complete"))
+				.Do(_ => { }).ToList();
+		}
+		catch (Exception ex) { Add(_finallyOut, $"Error caught: {ex.Message}", "value"); }
+		_finallyRunning = false; StateHasChanged();
+	}
+
+	// Using
+	private readonly List<OutputLine> _usingOut = []; private bool _usingRunning;
+	private async Task RunUsing()
+	{
+		_usingRunning = true; _usingOut.Clear(); StateHasChanged();
+		Add(_usingOut, "— Observable.Using(resource, factory) —", "info");
+		await Observable.Using(
+			() =>
+			{
+				Add(_usingOut, "  Resource created", "info");
+				return Disposable.Create(() => Add(_usingOut, "  Resource disposed ✓", "complete"));
+			},
+			_ => Observable.Range(1, 3))
+			.Do(v => Add(_usingOut, $"OnNext: {v}")).ToList();
+		Add(_usingOut, "Using completed ✓", "complete");
+		_usingRunning = false; StateHasChanged();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender) await JS.InvokeVoidAsync("highlightCode");
+	}
+	public void Dispose() { }
+}

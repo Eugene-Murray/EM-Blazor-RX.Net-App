@@ -1,0 +1,415 @@
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="section-title">
+	<span class="tag tag-utility">Utility</span> Utility Operators
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			Utility operators handle cross-cutting concerns: side-effects, scheduling,
+			time-shifting, lifecycle management, and materializing the notification
+			stream itself. They don't change emitted values — they change
+			<em>when, where,</em> or <em>how</em> those values flow.
+		</p>
+	</div>
+</div>
+
+<div class="operator-grid">
+
+	<!-- ── Do ─────────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-utility">Utility</span>
+			<span class="operator-name">Do (tap)</span>
+		</div>
+		<p class="operator-desc">
+			Injects side effects into the pipeline — logging, analytics, debugging —
+			without affecting the values. <code>Do</code> passes values through
+			unchanged and fires for <code>OnNext</code>, <code>OnError</code>, and
+			<code>OnCompleted</code>.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Logging and side-effects in a pipeline</span></div>
+			<pre><code class="language-csharp">Observable.Range(1, 5)
+		  .Do(n        =&gt; Console.WriteLine($"[tap] Before filter: {n}"))
+		  .Where(n     =&gt; n % 2 == 0)
+		  .Do(n        =&gt; Console.WriteLine($"[tap] After filter:  {n}"))
+		  .Subscribe(Console.WriteLine);
+
+// Full observer overload
+Observable.Range(1, 3)
+		  .Do(
+			  onNext:      n  =&gt; Console.WriteLine($"Next: {n}"),
+			  onError:     ex =&gt; Console.WriteLine($"Error: {ex.Message}"),
+			  onCompleted: () =&gt; Console.WriteLine("Tap: completed"))
+		  .Subscribe();</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunDo" disabled="@_doRunning">
+				@if (_doRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_doOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_doOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Delay ──────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-utility">Utility</span>
+			<span class="operator-name">Delay</span>
+		</div>
+		<p class="operator-desc">
+			Time-shifts the entire observable sequence forward by a fixed duration.
+			All <code>OnNext</code> notifications are delayed; <code>OnError</code>
+			is forwarded immediately (it doesn't wait for the delay).
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Shift emissions forward in time</span></div>
+			<pre><code class="language-csharp">// Every value arrives 500 ms later than it was emitted
+Observable.Range(1, 4)
+		  .Delay(TimeSpan.FromMilliseconds(500))
+		  .Subscribe(v =&gt; Console.WriteLine($"{DateTime.Now:ss.fff}  v={v}"));
+
+// Per-element delay via selector
+Observable.Range(1, 4)
+		  .Delay(n =&gt; Observable.Timer(TimeSpan.FromMilliseconds(n * 200)))
+		  .Subscribe(Console.WriteLine);
+// 1 after 200ms, 2 after 400ms, 3 after 600ms, 4 after 800ms</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunDelay" disabled="@_delayRunning">
+				@if (_delayRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (~800 ms)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_delayOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_delayOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Timeout ────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-utility">Utility</span>
+			<span class="operator-name">Timeout</span>
+		</div>
+		<p class="operator-desc">
+			Triggers a <code>TimeoutException</code> (or switches to a fallback
+			observable) if the source doesn't emit within a specified window.
+			Optionally apply a per-element timeout to detect slow producers.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Error or fallback if source is too slow</span></div>
+			<pre><code class="language-csharp">// Throw if nothing arrives within 500 ms
+Observable.Never&lt;int&gt;()
+		  .Timeout(TimeSpan.FromMilliseconds(500))
+		  .Subscribe(
+			  _  =&gt; { },
+			  ex =&gt; Console.WriteLine($"Timed out: {ex.GetType().Name}"));
+
+// Switch to fallback instead of throwing
+Observable.Never&lt;int&gt;()
+		  .Timeout(TimeSpan.FromMilliseconds(500),
+				   Observable.Return(-1))
+		  .Subscribe(v =&gt; Console.WriteLine($"Got: {v}"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunTimeout" disabled="@_toRunning">
+				@if (_toRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (2 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_toOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_toOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Materialize / Dematerialize ────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-utility">Utility</span>
+			<span class="operator-name">Materialize / Dematerialize</span>
+		</div>
+		<p class="operator-desc">
+			<code>Materialize</code> wraps each notification (OnNext, OnError,
+			OnCompleted) into a <code>Notification&lt;T&gt;</code> value so errors can
+			be handled as data. <code>Dematerialize</code> unwraps them back.
+			Useful for logging the full notification stream or implementing retry
+			policies as data.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Treat notifications as first-class values</span></div>
+			<pre><code class="language-csharp">// Materialize: convert all notifications to data
+Observable.Range(1, 3)
+		  .Materialize()
+		  .Subscribe(n =&gt;
+			  Console.WriteLine($"Kind={n.Kind}  Value={n.Value}"));
+// Kind=OnNext  Value=1
+// Kind=OnNext  Value=2
+// Kind=OnNext  Value=3
+// Kind=OnCompleted  Value=0 (default)
+
+// Error becomes a value — no exception thrown to subscriber
+Observable.Throw&lt;int&gt;(new Exception("boom"))
+		  .Materialize()
+		  .Subscribe(n =&gt; Console.WriteLine($"Kind={n.Kind}  Err={n.Exception?.Message}"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunMaterialize" disabled="@_matRunning">
+				@if (_matRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (2 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_matOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_matOut)</div>
+		</div>
+	</div>
+
+	<!-- ── ToArray / ToList / ToDictionary ────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-utility">Utility</span>
+			<span class="operator-name">ToArray / ToList / ToDictionary / ToLookup</span>
+		</div>
+		<p class="operator-desc">
+			Convert a completed observable into a single-emission collection.
+			All values are buffered until <code>OnCompleted</code>, then emitted
+			as one item. Each also has an <code>*Async</code> variant returning a
+			<code>Task</code>.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Collect the entire sequence into a collection</span></div>
+			<pre><code class="language-csharp">// ToArray — await the completed list
+int[] arr = await Observable.Range(1, 5).ToArray();
+// [1, 2, 3, 4, 5]
+
+// ToList
+IList&lt;int&gt; list = await Observable.Range(1, 3).ToList();
+
+// ToDictionary by key selector
+var items = new[] { ("a", 1), ("b", 2), ("c", 3) }.ToObservable();
+IDictionary&lt;string, int&gt; dict =
+	await items.ToDictionary(x =&gt; x.Item1, x =&gt; x.Item2);
+// dict["b"] == 2
+
+// ToLookup (allows multiple values per key)
+ILookup&lt;int, int&gt; lookup =
+	await Observable.Range(1, 6).ToLookup(n =&gt; n % 3);
+// lookup[0] → [3, 6], lookup[1] → [1, 4], lookup[2] → [2, 5]</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunCollectors" disabled="@_colRunning">
+				@if (_colRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_colOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_colOut)</div>
+		</div>
+	</div>
+
+	<!-- ── ObserveOn / SubscribeOn ────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-utility">Utility</span>
+			<span class="operator-name">ObserveOn / SubscribeOn</span>
+		</div>
+		<p class="operator-desc">
+			<code>ObserveOn</code> controls which scheduler delivers notifications to
+			your observer. <code>SubscribeOn</code> controls which scheduler performs
+			the subscription work (e.g., connecting to a cold source). In Blazor WASM
+			there is only one thread — these matter most in server-side or
+			background-thread scenarios.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Scheduler affinity for observer and subscription</span></div>
+			<pre><code class="language-csharp">// Ensure OnNext callbacks arrive on the UI thread (WPF / WinForms)
+fileWatcher.Events
+		   .ObserveOn(DispatcherScheduler.Current)
+		   .Subscribe(e =&gt; UpdateUI(e));
+
+// Heavy subscription work on a thread-pool thread
+Observable.Create&lt;byte[]&gt;(observer =&gt; ReadLargeFile(observer))
+		  .SubscribeOn(NewThreadScheduler.Default)
+		  .ObserveOn(DispatcherScheduler.Current)
+		  .Subscribe(chunk =&gt; Render(chunk));
+
+// In Blazor WASM — TaskPoolScheduler for background simulation
+Observable.Interval(TimeSpan.FromSeconds(1),
+					TaskPoolScheduler.Default)
+		  .Take(3)
+		  .ObserveOn(TaskPoolScheduler.Default)
+		  .Subscribe(t =&gt; Console.WriteLine($"Tick {t}"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunObserveOn" disabled="@_obsOnRunning">
+				@if (_obsOnRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_obsOnOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_obsOnOut)</div>
+		</div>
+	</div>
+
+</div>
+
+@code {
+	private record OutputLine(string Text, string Css);
+
+	private RenderFragment ConsoleBody(List<OutputLine> lines) => builder =>
+	{
+		if (lines.Count == 0)
+		{
+			builder.OpenElement(0, "div"); builder.AddAttribute(1, "class", "output-empty");
+			builder.AddContent(2, "Press Run to execute…"); builder.CloseElement();
+		}
+		else
+		{
+			int seq = 0;
+			foreach (var line in lines)
+			{
+				builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", $"output-line {line.Css}");
+				builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "output-prompt");
+				builder.AddContent(seq++, "›"); builder.CloseElement();
+				builder.OpenElement(seq++, "span"); builder.AddContent(seq++, line.Text); builder.CloseElement();
+				builder.CloseElement();
+			}
+		}
+	};
+
+	private void ClearOutput(List<OutputLine> list) { list.Clear(); StateHasChanged(); }
+	private void Add(List<OutputLine> list, string text, string css = "value") { list.Add(new(text, css)); StateHasChanged(); }
+
+	// Do
+	private readonly List<OutputLine> _doOut = []; private bool _doRunning;
+	private async Task RunDo()
+	{
+		_doRunning = true; _doOut.Clear(); StateHasChanged();
+		Add(_doOut, "— Range(1,5).Do(log).Where(even).Do(log) —", "info");
+		await Observable.Range(1, 5)
+			.Do(n => Add(_doOut, $"  [before filter] {n}", "info"))
+			.Where(n => n % 2 == 0)
+			.Do(n => Add(_doOut, $"  [after  filter] {n} ← passes", "value"))
+			.ToList();
+		Add(_doOut, "Completed ✓", "complete");
+		_doRunning = false; StateHasChanged();
+	}
+
+	// Delay
+	private readonly List<OutputLine> _delayOut = []; private bool _delayRunning;
+	private async Task RunDelay()
+	{
+		_delayRunning = true; _delayOut.Clear(); StateHasChanged();
+		Add(_delayOut, "— Range(1,4).Delay(per-element: n×200ms) —", "info");
+		await Observable.Range(1, 4)
+			.Delay(n => Observable.Timer(TimeSpan.FromMilliseconds(n * 200)))
+			.Do(v => Add(_delayOut, $"Received {v} at {DateTime.Now:ss.fff}")).ToList();
+		Add(_delayOut, "Delay completed ✓", "complete");
+		_delayRunning = false; StateHasChanged();
+	}
+
+	// Timeout
+	private readonly List<OutputLine> _toOut = []; private bool _toRunning;
+	private async Task RunTimeout()
+	{
+		_toRunning = true; _toOut.Clear(); StateHasChanged();
+		Add(_toOut, "— Never<int>().Timeout(500ms) → TimeoutException —", "info");
+		try
+		{
+			await Observable.Never<int>().Timeout(TimeSpan.FromMilliseconds(500)).ToList();
+		}
+		catch (TimeoutException ex) { Add(_toOut, $"Caught: {ex.GetType().Name} ✓", "complete"); }
+		Add(_toOut, "— Never<int>().Timeout(500ms, Return(-1)) → fallback —", "info");
+		await Observable.Never<int>()
+			.Timeout(TimeSpan.FromMilliseconds(500), Observable.Return(-1))
+			.Do(v => Add(_toOut, $"Fallback value: {v}")).ToList();
+		Add(_toOut, "Timeout with fallback completed ✓", "complete");
+		_toRunning = false; StateHasChanged();
+	}
+
+	// Materialize
+	private readonly List<OutputLine> _matOut = []; private bool _matRunning;
+	private async Task RunMaterialize()
+	{
+		_matRunning = true; _matOut.Clear(); StateHasChanged();
+		Add(_matOut, "— Range(1,3).Materialize() —", "info");
+		await Observable.Range(1, 3).Materialize()
+			.Do(n => Add(_matOut, $"Kind={n.Kind}  Value={n.Value}")).ToList();
+		Add(_matOut, "— Throw.Materialize() — error becomes data —", "info");
+		await Observable.Throw<int>(new Exception("boom")).Materialize()
+			.Do(n => Add(_matOut, $"Kind={n.Kind}  Err={n.Exception?.Message ?? "none"}")).ToList();
+		Add(_matOut, "Materialize completed ✓", "complete");
+		_matRunning = false; StateHasChanged();
+	}
+
+	// Collectors
+	private readonly List<OutputLine> _colOut = []; private bool _colRunning;
+	private async Task RunCollectors()
+	{
+		_colRunning = true; _colOut.Clear(); StateHasChanged();
+		var arr = await Observable.Range(1, 5).ToArray();
+		Add(_colOut, $"ToArray:  [{string.Join(", ", arr)}]");
+		var list = await Observable.Range(1, 3).ToList();
+		Add(_colOut, $"ToList:   [{string.Join(", ", list)}]");
+		var items = new[] { ("a", 1), ("b", 2), ("c", 3) }.ToObservable();
+		var dict = await items.ToDictionary(x => x.Item1, x => x.Item2);
+		Add(_colOut, $"ToDictionary[\"b\"]: {dict["b"]}");
+		var lookup = await Observable.Range(1, 6).ToLookup(n => n % 3);
+		Add(_colOut, $"ToLookup[0]: [{string.Join(",", lookup[0])}]");
+		Add(_colOut, $"ToLookup[1]: [{string.Join(",", lookup[1])}]");
+		Add(_colOut, $"ToLookup[2]: [{string.Join(",", lookup[2])}]");
+		Add(_colOut, "Collectors completed ✓", "complete");
+		_colRunning = false; StateHasChanged();
+	}
+
+	// ObserveOn
+	private readonly List<OutputLine> _obsOnOut = []; private bool _obsOnRunning;
+	private async Task RunObserveOn()
+	{
+		_obsOnRunning = true; _obsOnOut.Clear(); StateHasChanged();
+		Add(_obsOnOut, "— Interval(200ms).ObserveOn(TaskPool).Take(3) —", "info");
+		await Observable.Interval(TimeSpan.FromMilliseconds(200), TaskPoolScheduler.Default)
+			.Take(3)
+			.ObserveOn(TaskPoolScheduler.Default)
+			.Do(t => Add(_obsOnOut, $"Tick {t} on TaskPool ✓")).ToList();
+		Add(_obsOnOut, "ObserveOn completed ✓", "complete");
+		_obsOnRunning = false; StateHasChanged();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender) await JS.InvokeVoidAsync("highlightCode");
+	}
+	public void Dispose() { }
+}

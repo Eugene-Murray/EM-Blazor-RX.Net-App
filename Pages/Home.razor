@@ -1,0 +1,383 @@
+﻿@page "/"
+@inject IJSRuntime JS
+
+<PageTitle>Rx.NET in Blazor — Introduction</PageTitle>
+
+<!-- Hero -->
+<div class="hero">
+    <div class="hero-eyebrow">Reactive Extensions for .NET</div>
+    <h1>Rx.NET in Blazor ⚛️</h1>
+    <p>
+        Compose asynchronous and event-based programs using observable sequences.
+        This interactive reference shows every major Rx.NET operator, all four Subject types,
+        and real-world recipes — all running live inside the browser with Blazor WebAssembly.
+    </p>
+</div>
+
+<!-- Quick-nav cards -->
+<div class="quick-links">
+    <a href="operators" class="quick-link-card">
+        <span class="ql-icon">⚡</span>
+        <span class="ql-title">Operators</span>
+        <span class="ql-sub">Creation · Transform · Filter · Combine · Error · Utility · Multicast</span>
+    </a>
+    <a href="subjects" class="quick-link-card">
+        <span class="ql-icon">📡</span>
+        <span class="ql-title">Subjects</span>
+        <span class="ql-sub">Subject · Behavior · Replay · AsyncSubject</span>
+    </a>
+    <a href="recipes" class="quick-link-card">
+        <span class="ql-icon">🍳</span>
+        <span class="ql-title">Recipes</span>
+        <span class="ql-sub">Type-ahead · Retry · State · Cancellation · Progress</span>
+    </a>
+    <a href="https://introtorx.com" target="_blank" rel="noopener" class="quick-link-card">
+        <span class="ql-icon">📖</span>
+        <span class="ql-title">Introduction to Rx</span>
+        <span class="ql-sub">The canonical free online book by Lee Campbell</span>
+    </a>
+</div>
+
+<!-- What is Rx.NET? -->
+<div class="section-title">🔭 What is Rx.NET?</div>
+
+<div class="info-box note">
+    <span class="info-box-icon">💡</span>
+    <div class="info-box-content">
+        <p>
+            <strong>Reactive Extensions (Rx.NET)</strong> is a library for composing
+            asynchronous and event-based programs using observable sequences and LINQ-style
+            query operators. It treats time as a first-class citizen and turns any stream of
+            data — events, callbacks, timers, HTTP responses — into a composable
+            <code>IObservable&lt;T&gt;</code>.
+        </p>
+    </div>
+</div>
+
+<div class="two-col">
+    <div class="card">
+        <div class="card-header"><h3>🎯 Core Interfaces</h3></div>
+        <div class="card-body">
+            <p>Rx is built on two complementary interfaces from the BCL:</p>
+            <div class="code-block">
+                <div class="code-block-header">
+                    <span class="code-lang-badge">C#</span>
+                    <span>IObservable&lt;T&gt; &amp; IObserver&lt;T&gt;</span>
+                </div>
+                <pre><code class="language-csharp">// Push-based producer
+interface IObservable&lt;T&gt;
+{
+    IDisposable Subscribe(IObserver&lt;T&gt; observer);
+}
+
+// Push-based consumer
+interface IObserver&lt;T&gt;
+{
+    void OnNext(T value);      // receives a value
+    void OnError(Exception e); // receives an error
+    void OnCompleted();        // stream is finished
+}</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>🔄 Push vs Pull</h3></div>
+        <div class="card-body">
+            <p>Traditional C# is <em>pull-based</em> (you ask for data). Rx is <em>push-based</em> (data arrives when ready).</p>
+            <div class="code-block">
+                <div class="code-block-header">
+                    <span class="code-lang-badge">C#</span>
+                    <span>Observable.Interval demo</span>
+                </div>
+                <pre><code class="language-csharp">// Every second the scheduler PUSHES a value
+IObservable&lt;long&gt; ticks =
+    Observable.Interval(TimeSpan.FromSeconds(1));
+
+// Subscribe and react
+IDisposable sub = ticks
+    .Take(5)
+    .Subscribe(
+        onNext:      i =&gt; Console.WriteLine($"Tick {i}"),
+        onError:     e =&gt; Console.WriteLine($"Error: {e}"),
+        onCompleted: () =&gt; Console.WriteLine("Done!")
+    );</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Installation -->
+<div class="section-title">📦 Installation</div>
+
+<div class="install-step">
+    <div class="install-step-num">1</div>
+    <div class="install-step-body">
+        <h4>Add the NuGet package</h4>
+        <p>System.Reactive is the official package — it targets .NET Standard 2.0+ and .NET 6+.</p>
+        <div class="code-block">
+            <div class="code-block-header"><span class="code-lang-badge">CLI</span><span>dotnet CLI</span></div>
+            <pre><code class="language-bash">dotnet add package System.Reactive</code></pre>
+        </div>
+        <div class="code-block">
+            <div class="code-block-header"><span class="code-lang-badge">XML</span><span>.csproj</span></div>
+            <pre><code class="language-xml">&lt;PackageReference Include="System.Reactive" Version="6.0.1" /&gt;</code></pre>
+        </div>
+    </div>
+</div>
+
+<div class="install-step">
+    <div class="install-step-num">2</div>
+    <div class="install-step-body">
+        <h4>Add global usings (recommended)</h4>
+        <p>Put these in <code>_Imports.razor</code> for Blazor projects, or a <code>GlobalUsings.cs</code> file.</p>
+        <div class="code-block">
+            <div class="code-block-header"><span class="code-lang-badge">C#</span><span>_Imports.razor / GlobalUsings.cs</span></div>
+            <pre><code class="language-csharp">using System.Reactive;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
+using System.Reactive.Concurrency;
+using System.Reactive.Disposables;
+using System.Reactive.Threading.Tasks;</code></pre>
+        </div>
+    </div>
+</div>
+
+<div class="install-step">
+    <div class="install-step-num">3</div>
+    <div class="install-step-body">
+        <h4>Always dispose subscriptions</h4>
+        <p>
+            In Blazor components, implement <code>IDisposable</code> and dispose in
+            <code>Dispose()</code> to prevent memory leaks.
+        </p>
+        <div class="code-block">
+            <div class="code-block-header"><span class="code-lang-badge">C#</span><span>Blazor component pattern</span></div>
+            <pre><code class="language-csharp">@@implements IDisposable
+
+@@code {
+    private readonly CompositeDisposable _subs = new();
+
+    protected override void OnInitialized()
+    {
+        Observable.Interval(TimeSpan.FromSeconds(1))
+            .Subscribe(i =&gt; InvokeAsync(StateHasChanged))
+            .DisposeWith(_subs); // extension on CompositeDisposable
+    }
+
+    public void Dispose() { _subs.Dispose(); }
+}</code></pre>
+        </div>
+    </div>
+</div>
+
+<!-- Async/Await integration -->
+<div class="section-title">⚡ Rx.NET + async / await</div>
+
+<div class="info-box tip">
+    <span class="info-box-icon">✅</span>
+    <div class="info-box-content">
+        <p>
+            Rx.NET and <code>async/await</code> are complementary. Use Rx for ongoing streams
+            and <code>async/await</code> for one-off async operations — the two integrate seamlessly.
+        </p>
+    </div>
+</div>
+
+<div class="two-col">
+    <div class="card">
+        <div class="card-header"><h3>Task → Observable</h3></div>
+        <div class="card-body">
+            <div class="code-block">
+                <div class="code-block-header"><span class="code-lang-badge">C#</span></div>
+                <pre><code class="language-csharp">// Wrap any Task as a single-item observable
+IObservable&lt;string&gt; obs =
+    Observable.FromAsync(() =&gt; FetchDataAsync());
+
+// Await the first (and only) value
+string result = await obs.FirstAsync();
+
+// Or use ToTask() to get back a Task
+Task&lt;string&gt; task = obs.ToTask();</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Observable → Task</h3></div>
+        <div class="card-body">
+            <div class="code-block">
+                <div class="code-block-header"><span class="code-lang-badge">C#</span></div>
+                <pre><code class="language-csharp">// Await a single value from a stream
+string val = await myObservable.FirstAsync();
+
+// Await the last value (after completion)
+string last = await myObservable.LastAsync();
+
+// Collect all values into a list
+IList&lt;int&gt; all = await Observable
+    .Range(1, 10)
+    .ToList();</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key concepts -->
+<div class="section-title">🧩 Key Concepts</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="code-block">
+            <div class="code-block-header">
+                <span class="code-lang-badge">C#</span>
+                <span>Observable pipeline — full example with async/await in Blazor</span>
+            </div>
+            <pre><code class="language-csharp">@@implements IDisposable
+@@inject HttpClient Http
+
+// UI shows a live-updating count of matching items
+@@code {
+    private int _count;
+    private readonly Subject&lt;string&gt; _searchTerms = new();
+    private readonly CompositeDisposable _subs = new();
+
+    protected override void OnInitialized()
+    {
+        _searchTerms
+            .Throttle(TimeSpan.FromMilliseconds(300))   // wait for typing pause
+            .DistinctUntilChanged()                       // skip unchanged values
+            .Where(term =&gt; term.Length &gt; 1)              // ignore very short terms
+            .SelectMany(term =&gt;                           // switch to latest search
+                Observable.FromAsync(() =&gt;
+                    Http.GetFromJsonAsync&lt;int&gt;($"api/count?q={term}")))
+            .ObserveOn(SynchronizationContextScheduler    // marshal to UI thread
+                .Default)
+            .Subscribe(
+                count =&gt; { _count = count; InvokeAsync(StateHasChanged); },
+                ex    =&gt; Console.Error.WriteLine(ex))
+            .DisposeWith(_subs);
+    }
+
+    // Called from &lt;input @@oninput="e =&gt; _searchTerms.OnNext(e.Value?.ToString()!)" /&gt;
+    public void Dispose() { _subs.Dispose(); }
+}</code></pre>
+        </div>
+    </div>
+</div>
+
+<!-- Live Demo on Home Page -->
+<div class="section-title">▶️ Quick Live Demo</div>
+
+<div class="card">
+    <div class="card-header"><h3>Observable.Range + Select + Where</h3></div>
+    <div class="card-body">
+        <div class="code-block">
+            <div class="code-block-header"><span class="code-lang-badge">C#</span></div>
+            <pre><code class="language-csharp">Observable.Range(1, 20)           // produce 1..20
+    .Where(n => n % 2 == 0)       // keep even numbers
+    .Select(n => n * n)           // square them
+    .Subscribe(v => output(v));</code></pre>
+        </div>
+
+        <div class="btn-group" style="margin-bottom:.75rem">
+            <button class="btn btn-primary" @onclick="RunDemo" disabled="@_running">
+                @if (_running) { <span class="spinner"></span> } else { <span>▶</span> }
+                Run Demo
+            </button>
+            <button class="btn btn-outline btn-sm" @onclick="ClearDemo">Clear</button>
+        </div>
+
+        <div class="output-console">
+            <div class="output-console-header">
+                <div>
+                    <span class="output-dot dot-red"></span>
+                    <span class="output-dot dot-yellow"></span>
+                    <span class="output-dot dot-green"></span>
+                </div>
+                <span>Output</span>
+            </div>
+            <div class="output-console-body">
+                @if (_demoOutput.Count == 0)
+                {
+                    <div class="output-empty">Press "Run Demo" to execute the observable pipeline…</div>
+                }
+                else
+                {
+                    @foreach (var line in _demoOutput)
+                    {
+                        <div class="output-line @line.Css">
+                            <span class="output-prompt">›</span>
+                            <span>@line.Text</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resources -->
+<div class="section-title">📚 Resources</div>
+
+<div class="quick-links">
+    <a href="https://github.com/dotnet/reactive" target="_blank" rel="noopener" class="quick-link-card">
+        <span class="ql-icon">🐙</span>
+        <span class="ql-title">dotnet/reactive</span>
+        <span class="ql-sub">Official GitHub repository with source, issues, and discussions</span>
+    </a>
+    <a href="https://introtorx.com" target="_blank" rel="noopener" class="quick-link-card">
+        <span class="ql-icon">📖</span>
+        <span class="ql-title">Introduction to Rx.NET</span>
+        <span class="ql-sub">Free online book by Lee Campbell — the definitive guide</span>
+    </a>
+    <a href="https://www.nuget.org/packages/System.Reactive" target="_blank" rel="noopener" class="quick-link-card">
+        <span class="ql-icon">📦</span>
+        <span class="ql-title">System.Reactive on NuGet</span>
+        <span class="ql-sub">Package stats, version history, and release notes</span>
+    </a>
+    <a href="https://www.learnrxjs.io" target="_blank" rel="noopener" class="quick-link-card">
+        <span class="ql-icon">🌐</span>
+        <span class="ql-title">LearnRxJS</span>
+        <span class="ql-sub">Inspiration for this site — JavaScript Rx reference</span>
+    </a>
+</div>
+
+@code {
+    private readonly List<OutputLine> _demoOutput = [];
+    private bool _running;
+
+    private record OutputLine(string Text, string Css);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("highlightCode");
+    }
+
+    private async Task RunDemo()
+    {
+        _running = true;
+        _demoOutput.Clear();
+        StateHasChanged();
+
+        var results = await Observable.Range(1, 20)
+            .Where(n => n % 2 == 0)
+            .Select(n => n * n)
+            .ToList();
+
+        foreach (var v in results)
+            _demoOutput.Add(new($"Next: {v}", "value"));
+
+        _demoOutput.Add(new("Completed ✓", "complete"));
+        _running = false;
+        StateHasChanged();
+    }
+
+    private void ClearDemo()
+    {
+        _demoOutput.Clear();
+        StateHasChanged();
+    }
+}
+

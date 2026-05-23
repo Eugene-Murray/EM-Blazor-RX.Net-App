@@ -1,0 +1,885 @@
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="section-title">
+<span class="tag tag-creation">Creation</span> Creating Observables
+</div>
+
+<div class="info-box note">
+<span class="info-box-icon">💡</span>
+<div class="info-box-content">
+<p>
+Creation operators are the entry points of any Rx.NET pipeline — they produce the
+observable sequences that all other operators transform. Choose the right factory
+based on whether your data is synchronous, time-based, or pulled from an async source.
+</p>
+</div>
+</div>
+
+<div class="operator-grid">
+
+<!-- ── Return / Just ──────────────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">Return / Just</span>
+</div>
+<p class="operator-desc">
+Emits a <em>single</em> value synchronously, then completes.
+The simplest way to lift a plain value into the observable world.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Single value → complete</span>
+</div>
+<pre><code class="language-csharp">// Emit one value then complete
+IObservable&lt;int&gt; single = Observable.Return(42);
+single.Subscribe(
+v  =&gt; Console.WriteLine($"Next:      {v}"),
+() =&gt; Console.WriteLine("Completed"));
+// Next: 42
+// Completed
+
+// Useful as a default / fallback observable
+IObservable&lt;string&gt; fallback = Observable.Return("default value");
+
+// Works with any type
+Observable.Return(DateTime.UtcNow)
+  .Subscribe(d =&gt; Console.WriteLine(d));</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunReturn" disabled="@_returnRunning">
+@if (_returnRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_returnOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_returnOut)</div>
+</div>
+</div>
+
+<!-- ── Range ──────────────────────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">Range</span>
+</div>
+<p class="operator-desc">
+Emits a contiguous sequence of integers starting at <em>start</em> for
+<em>count</em> values, synchronously, then completes.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Integer sequence — synchronous</span>
+</div>
+<pre><code class="language-csharp">// Basic range: 1, 2, 3, 4, 5
+Observable.Range(1, 5)
+  .Subscribe(Console.WriteLine);
+
+// Combine with operators immediately
+Observable.Range(1, 10)
+  .Where(n =&gt; n % 2 == 0)
+  .Select(n =&gt; n * n)
+  .Subscribe(n =&gt; Console.WriteLine($"Even square: {n}"));
+// 4, 16, 36, 64, 100
+
+// Sum using Scan (running total)
+Observable.Range(1, 5)
+  .Scan(0, (acc, n) =&gt; acc + n)
+  .Subscribe(sum =&gt; Console.WriteLine($"Running sum: {sum}"));
+// 1, 3, 6, 10, 15</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunRange" disabled="@_rangeRunning">
+@if (_rangeRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run (3 demos)
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_rangeOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_rangeOut)</div>
+</div>
+</div>
+
+<!-- ── Empty / Never / Throw ──────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">Empty / Never / Throw</span>
+</div>
+<p class="operator-desc">
+Three degenerate observables useful as building blocks:
+<code>Empty</code> completes immediately, <code>Never</code> never terminates,
+and <code>Throw</code> immediately errors.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Degenerate observables — useful as defaults and tests</span>
+</div>
+<pre><code class="language-csharp">// Empty — completes with no values
+Observable.Empty&lt;int&gt;()
+  .Subscribe(
+  _ =&gt; Console.WriteLine("Never called"),
+  () =&gt; Console.WriteLine("Empty completed"));
+
+// Never — infinite, never completes or errors
+// Use with Timeout or TakeUntil in real code
+var never = Observable.Never&lt;int&gt;();
+
+// Throw — immediately calls OnError
+Observable.Throw&lt;int&gt;(new Exception("Boom!"))
+  .Subscribe(
+  _ =&gt; Console.WriteLine("Never called"),
+  ex  =&gt; Console.WriteLine($"Error: {ex.Message}"),
+  () =&gt; Console.WriteLine("Never called"));
+
+// Common pattern: use Empty as a safe Catch fallback
+someObservable.Catch&lt;int, Exception&gt;(_ =&gt; Observable.Empty&lt;int&gt;());</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunEmptyNeverThrow" disabled="@_entRunning">
+@if (_entRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_entOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_entOut)</div>
+</div>
+</div>
+
+<!-- ── Interval ───────────────────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">Interval</span>
+</div>
+<p class="operator-desc">
+Emits an ever-increasing <code>long</code> (0, 1, 2 …) at a fixed cadence,
+indefinitely. Add <code>Take</code> to limit it. The backbone of polling
+and animation loops.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Tick every N ms — infinite hot-ish sequence</span>
+</div>
+<pre><code class="language-csharp">// Tick every 500 ms; take first 6 ticks
+IDisposable sub = Observable
+.Interval(TimeSpan.FromMilliseconds(500))
+.Take(6)
+.Subscribe(
+tick =&gt; Console.WriteLine($"Tick {tick}"),
+()   =&gt; Console.WriteLine("Done"));
+
+// Always dispose when the component is destroyed!
+// protected override void Dispose() =&gt; sub.Dispose();
+
+// Combine with Select to produce meaningful values
+Observable.Interval(TimeSpan.FromSeconds(1))
+  .Select(i =&gt; DateTime.UtcNow.ToString("HH:mm:ss"))
+  .Take(5)
+  .Subscribe(Console.WriteLine);</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunInterval" disabled="@_intervalRunning">
+@if (_intervalRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run (6 ticks × 400 ms)
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_intervalOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_intervalOut)</div>
+</div>
+</div>
+
+<!-- ── Timer ──────────────────────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">Timer</span>
+</div>
+<p class="operator-desc">
+Fires after an initial <em>due time</em>, optionally continuing with a fixed
+period — giving you a delayed single-shot or a delayed interval.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Delayed fire — one-shot or periodic</span>
+</div>
+<pre><code class="language-csharp">// One-shot: fires once after 2 seconds
+Observable.Timer(TimeSpan.FromSeconds(2))
+  .Subscribe(_ =&gt; Console.WriteLine("Fired after 2s"));
+
+// Periodic: start after 1s, then every 500ms
+Observable.Timer(
+TimeSpan.FromSeconds(1),
+TimeSpan.FromMilliseconds(500))
+.Take(4)
+.Subscribe(tick =&gt; Console.WriteLine($"Tick {tick}"));
+
+// Useful for delayed retries / back-off
+var delayed = Observable.Timer(TimeSpan.FromMilliseconds(500))
+.SelectMany(_ =&gt; FetchData());</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunTimer" disabled="@_timerRunning">
+@if (_timerRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_timerOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_timerOut)</div>
+</div>
+</div>
+
+<!-- ── FromAsync ──────────────────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">FromAsync</span>
+</div>
+<p class="operator-desc">
+Wraps a <code>Task</code> or <code>Task&lt;T&gt;</code> into a cold observable —
+the task starts only when someone subscribes. The bridge between async/await
+and the Rx world.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Task → cold observable (lazy, cancellable)</span>
+</div>
+<pre><code class="language-csharp">// Wrap an async method — task runs on subscribe
+IObservable&lt;string&gt; obs = Observable.FromAsync(async ct =&gt;
+{
+await Task.Delay(500, ct);     // ct honours unsubscription
+return "Hello from async!";
+});
+
+obs.Subscribe(Console.WriteLine); // task starts NOW
+obs.Subscribe(Console.WriteLine); // second subscribe = second task run
+
+// Compose like any observable
+Observable.FromAsync(() =&gt; httpClient.GetStringAsync("/api/data"))
+  .Select(json =&gt; JsonSerializer.Deserialize&lt;MyModel&gt;(json))
+  .Subscribe(model =&gt; UpdateUI(model));
+
+// Use with SelectMany for per-item async work
+Observable.Range(1, 3)
+  .SelectMany(id =&gt; Observable.FromAsync(() =&gt; FetchUser(id)))
+  .Subscribe(Console.WriteLine);</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunFromAsync" disabled="@_fromAsyncRunning">
+@if (_fromAsyncRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run (2 subscriptions)
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_fromAsyncOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_fromAsyncOut)</div>
+</div>
+</div>
+
+<!-- ── Create ─────────────────────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">Create</span>
+</div>
+<p class="operator-desc">
+The escape hatch — build any observable from scratch by calling
+<code>OnNext</code>, <code>OnError</code>, and <code>OnCompleted</code>
+manually. Return a disposable for clean-up on unsubscription.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Full manual control over the observable contract</span>
+</div>
+<pre><code class="language-csharp">IObservable&lt;int&gt; myObs = Observable.Create&lt;int&gt;(observer =&gt;
+{
+observer.OnNext(1);
+observer.OnNext(2);
+
+// Could conditionally call OnError instead:
+// observer.OnError(new Exception("oops"));
+
+observer.OnNext(3);
+observer.OnCompleted();
+
+// Return cleanup action (called on Dispose / unsubscription)
+return Disposable.Create(() =&gt; Console.WriteLine("Unsubscribed"));
+});
+
+myObs.Subscribe(
+v  =&gt; Console.WriteLine($"Next: {v}"),
+ex =&gt; Console.WriteLine($"Error: {ex.Message}"),
+() =&gt; Console.WriteLine("Completed"));
+
+// Async variant — great for bridging event-based APIs
+IObservable&lt;string&gt; fromEvents = Observable.Create&lt;string&gt;(async observer =&gt;
+{
+await Task.Delay(100);
+observer.OnNext("Event arrived");
+observer.OnCompleted();
+});</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunCreate" disabled="@_createRunning">
+@if (_createRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_createOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_createOut)</div>
+</div>
+</div>
+
+<!-- ── Defer ──────────────────────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">Defer</span>
+</div>
+<p class="operator-desc">
+Delays observable creation until subscription time — each subscriber gets a
+<em>freshly created</em> observable. Useful when the factory depends on
+state that changes between subscriptions.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Fresh observable per subscription — captures state at subscribe time</span>
+</div>
+<pre><code class="language-csharp">// Without Defer: timestamp captured ONCE at creation time
+var eager = Observable.Return(DateTime.UtcNow);
+
+// With Defer: timestamp captured fresh on EACH subscription
+var lazy = Observable.Defer(() =&gt; Observable.Return(DateTime.UtcNow));
+
+eager.Subscribe(t =&gt; Console.WriteLine($"Eager: {t:HH:mm:ss.fff}"));
+await Task.Delay(500);
+eager.Subscribe(t =&gt; Console.WriteLine($"Eager: {t:HH:mm:ss.fff}")); // same!
+
+lazy.Subscribe(t =&gt; Console.WriteLine($"Lazy:  {t:HH:mm:ss.fff}"));
+await Task.Delay(500);
+lazy.Subscribe(t =&gt; Console.WriteLine($"Lazy:  {t:HH:mm:ss.fff}")); // different!
+
+// Practical use: defer reading volatile config/state
+var deferred = Observable.Defer(() =&gt;
+Observable.FromAsync(() =&gt; FetchWithCurrentToken(authToken)));</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunDefer" disabled="@_deferRunning">
+@if (_deferRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run (eager vs lazy)
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_deferOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_deferOut)</div>
+</div>
+</div>
+
+<!-- ── Generate ───────────────────────────────────────────────────── -->
+<div class="operator-card">
+<div class="operator-card-header">
+<span class="tag tag-creation">Creation</span>
+<span class="operator-name">Generate</span>
+</div>
+<p class="operator-desc">
+A generalised loop — like a <code>for</code> statement turned into an observable.
+Provide an initial state, a condition, a step, and a result selector.
+</p>
+<div class="code-block">
+<div class="code-block-header">
+<span class="code-lang-badge">C#</span>
+<span>Observable for-loop — full control over state progression</span>
+</div>
+<pre><code class="language-csharp">// Equivalent to: for (int i = 1; i &lt;= 5; i++) yield return i * i;
+Observable.Generate(
+initialState: 1,
+condition:    i =&gt; i &lt;= 5,
+iterate:      i =&gt; i + 1,
+resultSelector: i =&gt; i * i)
+.Subscribe(Console.WriteLine);
+// 1, 4, 9, 16, 25
+
+// Fibonacci sequence — state is a tuple
+Observable.Generate(
+initialState: (a: 0, b: 1),
+condition:    s =&gt; s.a &lt; 100,
+iterate:      s =&gt; (s.b, s.a + s.b),
+resultSelector: s =&gt; s.a)
+.Subscribe(Console.WriteLine);
+// 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89
+
+// Timed variant — emit state every 300 ms
+Observable.Generate(
+initialState: 0,
+condition:    i =&gt; i &lt; 5,
+iterate:      i =&gt; i + 1,
+resultSelector: i =&gt; $"Step {i}",
+timeSelector:   _ =&gt; TimeSpan.FromMilliseconds(300))
+.Subscribe(Console.WriteLine);</code></pre>
+</div>
+<div class="btn-group">
+<button class="btn btn-primary btn-sm" @onclick="RunGenerate" disabled="@_generateRunning">
+@if (_generateRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+Run (3 demos)
+</button>
+<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_generateOut)">Clear</button>
+</div>
+<div class="output-console">
+<div class="output-console-header">
+<div>
+<span class="output-dot dot-red"></span>
+<span class="output-dot dot-yellow"></span>
+<span class="output-dot dot-green"></span>
+</div>
+<span>Output</span>
+</div>
+<div class="output-console-body">@ConsoleBody(_generateOut)</div>
+</div>
+</div>
+
+</div><!-- /operator-grid -->
+
+@code {
+// ── Shared helpers ────────────────────────────────────────────────────────
+private record OutputLine(string Text, string Css);
+
+private RenderFragment ConsoleBody(List<OutputLine> lines) => builder =>
+{
+if (lines.Count == 0)
+{
+builder.OpenElement(0, "div");
+builder.AddAttribute(1, "class", "output-empty");
+builder.AddContent(2, "Press Run to execute…");
+builder.CloseElement();
+}
+else
+{
+int seq = 0;
+foreach (var line in lines)
+{
+builder.OpenElement(seq++, "div");
+builder.AddAttribute(seq++, "class", $"output-line {line.Css}");
+builder.OpenElement(seq++, "span");
+builder.AddAttribute(seq++, "class", "output-prompt");
+builder.AddContent(seq++, "›");
+builder.CloseElement();
+builder.OpenElement(seq++, "span");
+builder.AddContent(seq++, line.Text);
+builder.CloseElement();
+builder.CloseElement();
+}
+}
+};
+
+private void ClearOutput(List<OutputLine> list) { list.Clear(); StateHasChanged(); }
+
+private void Add(List<OutputLine> list, string text, string css = "value")
+{
+list.Add(new(text, css));
+StateHasChanged();
+}
+
+// ── Return ────────────────────────────────────────────────────────────────
+private readonly List<OutputLine> _returnOut = [];
+private bool _returnRunning;
+
+private async Task RunReturn()
+{
+_returnRunning = true;
+_returnOut.Clear();
+StateHasChanged();
+
+Add(_returnOut, "— Observable.Return(42) —", "info");
+Observable.Return(42).Subscribe(
+v  => Add(_returnOut, $"Next: {v}"),
+() => Add(_returnOut, "Completed ✓", "complete"));
+
+await Task.Delay(50);
+
+Add(_returnOut, "— Observable.Return(DateTime.UtcNow) —", "info");
+Observable.Return(DateTime.UtcNow).Subscribe(
+v  => Add(_returnOut, $"Next: {v:HH:mm:ss.fff} UTC"),
+() => Add(_returnOut, "Completed ✓", "complete"));
+
+await Task.Delay(50);
+
+Add(_returnOut, "— Observable.Return(\"fallback\") —", "info");
+Observable.Return("fallback value").Subscribe(
+v  => Add(_returnOut, $"Next: {v}"),
+() => Add(_returnOut, "Completed ✓", "complete"));
+
+_returnRunning = false;
+StateHasChanged();
+}
+
+// ── Range ─────────────────────────────────────────────────────────────────
+private readonly List<OutputLine> _rangeOut = [];
+private bool _rangeRunning;
+
+private async Task RunRange()
+{
+_rangeRunning = true;
+_rangeOut.Clear();
+StateHasChanged();
+
+Add(_rangeOut, "— Observable.Range(1, 5) —", "info");
+await Observable.Range(1, 5)
+.Do(v => Add(_rangeOut, $"Next: {v}"))
+.ToList();
+Add(_rangeOut, "Completed ✓", "complete");
+
+Add(_rangeOut, "— Range(1,10).Where(even).Select(n²) —", "info");
+await Observable.Range(1, 10)
+.Where(n => n % 2 == 0)
+.Select(n => n * n)
+.Do(v => Add(_rangeOut, $"Even square: {v}"))
+.ToList();
+
+Add(_rangeOut, "— Range(1,5).Scan(running sum) —", "info");
+await Observable.Range(1, 5)
+.Scan(0, (acc, n) => acc + n)
+.Do(v => Add(_rangeOut, $"Running sum: {v}"))
+.ToList();
+Add(_rangeOut, "All demos completed ✓", "complete");
+
+_rangeRunning = false;
+StateHasChanged();
+}
+
+// ── Empty / Never / Throw ─────────────────────────────────────────────────
+private readonly List<OutputLine> _entOut = [];
+private bool _entRunning;
+
+private async Task RunEmptyNeverThrow()
+{
+_entRunning = true;
+_entOut.Clear();
+StateHasChanged();
+
+Add(_entOut, "— Observable.Empty<int>() —", "info");
+Observable.Empty<int>().Subscribe(
+_ => Add(_entOut, "OnNext (never called)"),
+() => Add(_entOut, "Completed immediately ✓", "complete"));
+
+await Task.Delay(50);
+
+Add(_entOut, "— Observable.Never<int>() (with 300ms Timeout) —", "info");
+try
+{
+await Observable.Never<int>()
+.Timeout(TimeSpan.FromMilliseconds(300))
+.ToList();
+}
+catch (TimeoutException)
+{
+Add(_entOut, "Never timed out as expected ✓", "complete");
+}
+
+Add(_entOut, "— Observable.Throw<int>(ex) —", "info");
+Observable.Throw<int>(new InvalidOperationException("Boom!")).Subscribe(
+_ => Add(_entOut, "OnNext (never called)"),
+ex => Add(_entOut, $"OnError: {ex.Message} ✓", "complete"),
+() => Add(_entOut, "OnCompleted (never called)"));
+
+_entRunning = false;
+StateHasChanged();
+}
+
+// ── Interval ──────────────────────────────────────────────────────────────
+private readonly List<OutputLine> _intervalOut = [];
+private bool _intervalRunning;
+
+private async Task RunInterval()
+{
+_intervalRunning = true;
+_intervalOut.Clear();
+StateHasChanged();
+
+Add(_intervalOut, "Interval(400 ms) × 6 ticks…", "info");
+
+await Observable.Interval(TimeSpan.FromMilliseconds(400))
+.Take(6)
+.Do(tick => Add(_intervalOut, $"Tick {tick}  [{DateTime.UtcNow:HH:mm:ss.fff}]"))
+.ToList();
+
+Add(_intervalOut, "Interval completed ✓", "complete");
+_intervalRunning = false;
+StateHasChanged();
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────
+private readonly List<OutputLine> _timerOut = [];
+private bool _timerRunning;
+
+private async Task RunTimer()
+{
+_timerRunning = true;
+_timerOut.Clear();
+StateHasChanged();
+
+Add(_timerOut, "One-shot: Timer fires after 500 ms…", "info");
+await Observable.Timer(TimeSpan.FromMilliseconds(500))
+.Do(_ => Add(_timerOut, $"One-shot fired at {DateTime.UtcNow:HH:mm:ss.fff} ✓", "complete"))
+.ToList();
+
+Add(_timerOut, "Periodic: Timer(200 ms due, 300 ms period) × 4…", "info");
+await Observable.Timer(
+TimeSpan.FromMilliseconds(200),
+TimeSpan.FromMilliseconds(300))
+.Take(4)
+.Do(tick => Add(_timerOut, $"Periodic tick {tick}"))
+.ToList();
+
+Add(_timerOut, "Timer completed ✓", "complete");
+_timerRunning = false;
+StateHasChanged();
+}
+
+// ── FromAsync ─────────────────────────────────────────────────────────────
+private readonly List<OutputLine> _fromAsyncOut = [];
+private bool _fromAsyncRunning;
+private int  _fromAsyncCallCount;
+
+private async Task RunFromAsync()
+{
+_fromAsyncRunning = true;
+_fromAsyncOut.Clear();
+_fromAsyncCallCount = 0;
+StateHasChanged();
+
+IObservable<string> coldObs = Observable.FromAsync(async ct =>
+{
+int n = ++_fromAsyncCallCount;
+Add(_fromAsyncOut, $"Task #{n} started (each subscribe = new task)", "info");
+await Task.Delay(300, ct);
+return $"Result from task #{n}";
+});
+
+Add(_fromAsyncOut, "First subscription…", "info");
+var r1 = await coldObs.FirstAsync();
+Add(_fromAsyncOut, $"Sub #1 got: {r1}", "complete");
+
+Add(_fromAsyncOut, "Second subscription…", "info");
+var r2 = await coldObs.FirstAsync();
+Add(_fromAsyncOut, $"Sub #2 got: {r2}", "complete");
+
+Add(_fromAsyncOut, "SelectMany — 3 parallel async calls…", "info");
+await Observable.Range(1, 3)
+.SelectMany(id => Observable.FromAsync(async () =>
+{
+await Task.Delay(id * 80);
+return $"User{id} (delay {id * 80}ms)";
+}))
+.Do(v => Add(_fromAsyncOut, $"Result: {v}"))
+.ToList();
+
+Add(_fromAsyncOut, "All done ✓", "complete");
+_fromAsyncRunning = false;
+StateHasChanged();
+}
+
+// ── Create ────────────────────────────────────────────────────────────────
+private readonly List<OutputLine> _createOut = [];
+private bool _createRunning;
+
+private async Task RunCreate()
+{
+_createRunning = true;
+_createOut.Clear();
+StateHasChanged();
+
+Add(_createOut, "— Observable.Create (sync) —", "info");
+Observable.Create<int>(observer =>
+{
+observer.OnNext(1);
+observer.OnNext(2);
+observer.OnNext(3);
+observer.OnCompleted();
+return Disposable.Create(() => Add(_createOut, "Cleanup called on Dispose ✓", "info"));
+}).Subscribe(
+v  => Add(_createOut, $"Next: {v}"),
+() => Add(_createOut, "Completed ✓", "complete"));
+
+await Task.Delay(100);
+
+Add(_createOut, "— Observable.Create (async, with error) —", "info");
+await Observable.Create<string>(async observer =>
+{
+await Task.Delay(150);
+observer.OnNext("First async value");
+await Task.Delay(150);
+observer.OnNext("Second async value");
+observer.OnCompleted();
+})
+.Do(v => Add(_createOut, $"Next: {v}"))
+.ToList();
+
+Add(_createOut, "Async Create completed ✓", "complete");
+_createRunning = false;
+StateHasChanged();
+}
+
+// ── Defer ─────────────────────────────────────────────────────────────────
+private readonly List<OutputLine> _deferOut = [];
+private bool _deferRunning;
+
+private async Task RunDefer()
+{
+_deferRunning = true;
+_deferOut.Clear();
+StateHasChanged();
+
+// Eager: captured once at creation
+var eager = Observable.Return(DateTime.UtcNow);
+
+// Lazy: captured fresh on each subscribe
+var lazy = Observable.Defer(() => Observable.Return(DateTime.UtcNow));
+
+Add(_deferOut, "First subscribe (t=0):", "info");
+eager.Subscribe(t => Add(_deferOut, $"Eager: {t:HH:mm:ss.fff}"));
+lazy.Subscribe(t  => Add(_deferOut, $"Lazy:  {t:HH:mm:ss.fff}"));
+
+Add(_deferOut, "Waiting 600 ms…", "info");
+await Task.Delay(600);
+
+Add(_deferOut, "Second subscribe (t=600ms):", "info");
+eager.Subscribe(t => Add(_deferOut, $"Eager: {t:HH:mm:ss.fff}  ← same as before"));
+lazy.Subscribe(t  => Add(_deferOut, $"Lazy:  {t:HH:mm:ss.fff}  ← fresh value", "complete"));
+
+Add(_deferOut, "Defer demo completed ✓", "complete");
+_deferRunning = false;
+StateHasChanged();
+}
+
+// ── Generate ──────────────────────────────────────────────────────────────
+private readonly List<OutputLine> _generateOut = [];
+private bool _generateRunning;
+
+private async Task RunGenerate()
+{
+_generateRunning = true;
+_generateOut.Clear();
+StateHasChanged();
+
+Add(_generateOut, "— Squares: Generate(1, i≤5, i++, i²) —", "info");
+await Observable.Generate(
+initialState:   1,
+condition:      i => i <= 5,
+iterate:        i => i + 1,
+resultSelector: i => i * i)
+.Do(v => Add(_generateOut, $"Next: {v}"))
+.ToList();
+Add(_generateOut, "Completed ✓", "complete");
+
+Add(_generateOut, "— Fibonacci: Generate((0,1), a<100, …) —", "info");
+await Observable.Generate(
+initialState:   (a: 0, b: 1),
+condition:      s => s.a < 100,
+iterate:        s => (s.b, s.a + s.b),
+resultSelector: s => s.a)
+.Do(v => Add(_generateOut, $"Fib: {v}"))
+.ToList();
+Add(_generateOut, "Completed ✓", "complete");
+
+Add(_generateOut, "— Timed: Generate(0, i<5, i++, 300ms) —", "info");
+await Observable.Generate(
+initialState:   0,
+condition:      i => i < 5,
+iterate:        i => i + 1,
+resultSelector: i => $"Step {i}",
+timeSelector:   _ => TimeSpan.FromMilliseconds(300))
+.Do(v => Add(_generateOut, v))
+.ToList();
+Add(_generateOut, "All Generate demos completed ✓", "complete");
+
+_generateRunning = false;
+StateHasChanged();
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────
+protected override async Task OnAfterRenderAsync(bool firstRender)
+{
+if (firstRender)
+await JS.InvokeVoidAsync("highlightCode");
+}
+
+public void Dispose() { /* nothing long-lived to clean up */ }
+}

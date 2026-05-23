@@ -1,0 +1,550 @@
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="section-title">
+	<span class="tag tag-filter">Filtering</span> Filtering Observables
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			Filtering operators selectively pass or suppress values — they never modify
+			the values themselves, only decide <em>which</em> ones flow downstream and
+			<em>when</em>.
+		</p>
+	</div>
+</div>
+
+<div class="operator-grid">
+
+	<!-- ── Where ──────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-filter">Filtering</span>
+			<span class="operator-name">Where</span>
+		</div>
+		<p class="operator-desc">
+			Passes only values that satisfy a predicate — the direct Rx equivalent of
+			LINQ <code>Where</code>. Values that fail are silently dropped.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Predicate filtering</span></div>
+			<pre><code class="language-csharp">// Keep even numbers only
+Observable.Range(1, 10)
+		  .Where(n =&gt; n % 2 == 0)
+		  .Subscribe(Console.WriteLine);
+// 2, 4, 6, 8, 10
+
+// Chain multiple predicates
+Observable.Range(1, 20)
+		  .Where(n =&gt; n % 2 == 0)
+		  .Where(n =&gt; n % 3 == 0)   // divisible by 6
+		  .Subscribe(Console.WriteLine);
+// 6, 12, 18
+
+// Filter objects by property
+var people = new[] { ("Alice",30), ("Bob",17), ("Carol",25) }.ToObservable();
+people.Where(x =&gt; x.Item2 &gt;= 18)
+	  .Subscribe(x =&gt; Console.WriteLine(x.Item1));
+// Alice, Carol</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunWhere" disabled="@_whereRunning">
+				@if (_whereRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (3 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_whereOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_whereOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Take family ────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-filter">Filtering</span>
+			<span class="operator-name">Take / TakeLast / TakeWhile / TakeUntil</span>
+		</div>
+		<p class="operator-desc">
+			<code>Take(n)</code> forwards the first <em>n</em> values then completes.
+			<code>TakeLast(n)</code> buffers and emits only the final <em>n</em>.
+			<code>TakeWhile</code> stops at the first failing predicate.
+			<code>TakeUntil</code> stops when a notifier observable fires.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Limit how many values flow through</span></div>
+			<pre><code class="language-csharp">// First 3
+Observable.Range(1, 10).Take(3).Subscribe(Console.WriteLine);
+// 1, 2, 3
+
+// Last 3 (buffers until complete)
+Observable.Range(1, 10).TakeLast(3).Subscribe(Console.WriteLine);
+// 8, 9, 10
+
+// Stop when predicate fails
+Observable.Range(1, 10)
+		  .TakeWhile(n =&gt; n &lt; 5)
+		  .Subscribe(Console.WriteLine);
+// 1, 2, 3, 4
+
+// Stop when a notifier fires (great for component teardown)
+var stop = Observable.Timer(TimeSpan.FromMilliseconds(750));
+Observable.Interval(TimeSpan.FromMilliseconds(200))
+		  .TakeUntil(stop)
+		  .Subscribe(tick =&gt; Console.WriteLine($"Tick {tick}"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunTake" disabled="@_takeRunning">
+				@if (_takeRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (4 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_takeOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_takeOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Skip family ────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-filter">Filtering</span>
+			<span class="operator-name">Skip / SkipLast / SkipWhile / SkipUntil</span>
+		</div>
+		<p class="operator-desc">
+			The mirror of <code>Take</code>: suppress the first <em>n</em> values
+			(<code>Skip</code>), the last <em>n</em> (<code>SkipLast</code>),
+			values while a predicate holds (<code>SkipWhile</code>), or values
+			before a notifier fires (<code>SkipUntil</code>).
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Suppress leading or trailing values</span></div>
+			<pre><code class="language-csharp">Observable.Range(1, 6).Skip(3).Subscribe(Console.WriteLine);
+// 4, 5, 6
+
+Observable.Range(1, 6).SkipLast(2).Subscribe(Console.WriteLine);
+// 1, 2, 3, 4
+
+Observable.Range(1, 8)
+		  .SkipWhile(n =&gt; n &lt; 5)
+		  .Subscribe(Console.WriteLine);
+// 5, 6, 7, 8
+
+// Gate: start forwarding after a 600 ms delay
+var gate = Observable.Timer(TimeSpan.FromMilliseconds(600));
+Observable.Interval(TimeSpan.FromMilliseconds(200))
+		  .SkipUntil(gate)
+		  .Take(3)
+		  .Subscribe(tick =&gt; Console.WriteLine($"Tick {tick}"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunSkip" disabled="@_skipRunning">
+				@if (_skipRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (4 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_skipOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_skipOut)</div>
+		</div>
+	</div>
+
+	<!-- ── First / Last / Single / ElementAt ──────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-filter">Filtering</span>
+			<span class="operator-name">First / Last / Single / ElementAt</span>
+		</div>
+		<p class="operator-desc">
+			Extract a single element by position or predicate. Each has an
+			<code>*Async</code> variant returning <code>Task&lt;T&gt;</code> and an
+			<code>*OrDefault</code> variant returning <code>default(T)</code> instead
+			of throwing when nothing matches.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Extract one element from the sequence</span></div>
+			<pre><code class="language-csharp">var numbers = Observable.Range(1, 5);
+
+int first     = await numbers.FirstAsync();              // 1
+int firstEven = await numbers.FirstAsync(n =&gt; n % 2==0); // 2
+int last      = await numbers.LastAsync();               // 5
+int only      = await Observable.Return(42).SingleAsync();
+int third     = await numbers.ElementAt(2);              // 3
+
+// OrDefault — never throws, returns default(T) for empty
+int none = await Observable.Empty&lt;int&gt;().FirstOrDefaultAsync(); // 0</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunFirst" disabled="@_firstRunning">
+				@if (_firstRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_firstOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_firstOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Distinct / DistinctUntilChanged ────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-filter">Filtering</span>
+			<span class="operator-name">Distinct / DistinctUntilChanged</span>
+		</div>
+		<p class="operator-desc">
+			<code>Distinct</code> suppresses every value seen before (global set dedup).
+			<code>DistinctUntilChanged</code> only suppresses a value equal to the
+			<em>immediately preceding</em> one — perfect for state streams where you
+			react only to actual changes.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Global vs consecutive deduplication</span></div>
+			<pre><code class="language-csharp">// Distinct — global dedup (set-based)
+new[] { 1, 2, 2, 3, 1, 4 }.ToObservable()
+	.Distinct()
+	.Subscribe(Console.WriteLine);
+// 1, 2, 3, 4
+
+// Distinct by key
+new[] { ("Alice",1), ("Bob",2), ("Alice",3) }.ToObservable()
+	.Distinct(x =&gt; x.Item1)
+	.Subscribe(x =&gt; Console.WriteLine(x.Item1));
+// Alice, Bob
+
+// DistinctUntilChanged — consecutive dedup only
+new[] { 1, 1, 2, 3, 3, 3, 2 }.ToObservable()
+	.DistinctUntilChanged()
+	.Subscribe(Console.WriteLine);
+// 1, 2, 3, 2   ← trailing 2 passes (previous was 3)</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunDistinct" disabled="@_distinctRunning">
+				@if (_distinctRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run (3 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_distinctOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_distinctOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Throttle ───────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-filter">Filtering</span>
+			<span class="operator-name">Throttle (Debounce)</span>
+		</div>
+		<p class="operator-desc">
+			Emits a value only after a specified <em>silence period</em> has elapsed with
+			no new values arriving. In Rx.NET, <code>Throttle</code> is the equivalent of
+			RxJS <code>debounceTime</code> — ideal for suppressing keyboard bursts.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Emit only after silence — perfect for text input</span></div>
+			<pre><code class="language-csharp">var keystrokes = new Subject&lt;string&gt;();
+
+keystrokes
+	.Throttle(TimeSpan.FromMilliseconds(400))
+	.Subscribe(term =&gt; SearchApi(term));
+
+keystrokes.OnNext("r");        // suppressed
+keystrokes.OnNext("rx");       // suppressed
+keystrokes.OnNext("rx.net");   // ← emitted after 400ms silence</code></pre>
+		</div>
+		<div class="info-box info" style="margin:0 1rem .6rem;">
+			<span class="info-box-icon">ℹ️</span>
+			<div class="info-box-content"><p>Type quickly below — only the value present after a 300 ms pause propagates.</p></div>
+		</div>
+		<div style="padding:0 1rem .6rem;">
+			<input class="recipe-input" placeholder="Type quickly…" @oninput="OnThrottleInput" />
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Throttle output (300 ms silence)</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_throttleOut)</div>
+		</div>
+	</div>
+
+	<!-- ── Sample ─────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-filter">Filtering</span>
+			<span class="operator-name">Sample</span>
+		</div>
+		<p class="operator-desc">
+			Emits the <em>most recent</em> value from the source on a fixed clock tick.
+			Unlike <code>Throttle</code>, it is <strong>clock-driven</strong> — it fires
+			even if the source is silent (no emission that interval means no output).
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Clock-driven snapshot of a fast stream</span></div>
+			<pre><code class="language-csharp">// Fast source every 100 ms, sampled every 500 ms
+Observable.Interval(TimeSpan.FromMilliseconds(100))
+		  .Sample(TimeSpan.FromMilliseconds(500))
+		  .Take(4)
+		  .Subscribe(v =&gt; Console.WriteLine($"Sample: {v}"));
+// Sample: 4   (tick 4 was current when first 500ms elapsed)
+// Sample: 9
+// Sample: 14
+// Sample: 19
+
+// Notifier-driven sampling
+var sampler = Observable.Interval(TimeSpan.FromMilliseconds(700));
+fastSource.Sample(sampler).Take(3).Subscribe(Console.WriteLine);</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunSample" disabled="@_sampleRunning">
+				@if (_sampleRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_sampleOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_sampleOut)</div>
+		</div>
+	</div>
+
+	<!-- ── IgnoreElements ─────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-filter">Filtering</span>
+			<span class="operator-name">IgnoreElements</span>
+		</div>
+		<p class="operator-desc">
+			Discards all <code>OnNext</code> notifications but forwards
+			<code>OnError</code> and <code>OnCompleted</code> unchanged. Use it
+			when you care only about <em>completion</em> or <em>failure</em>, not
+			the emitted values.
+		</p>
+		<div class="code-block">
+			<div class="code-block-header"><span class="code-lang-badge">C#</span><span>Pass only terminal notifications</span></div>
+			<pre><code class="language-csharp">// All OnNext calls are dropped — only OnCompleted fires
+Observable.Range(1, 5)
+		  .IgnoreElements()
+		  .Subscribe(
+			  _ =&gt; Console.WriteLine("Never called"),
+			  () =&gt; Console.WriteLine("Completed"));
+
+// Error still propagates through IgnoreElements
+Observable.Throw&lt;int&gt;(new Exception("boom"))
+		  .IgnoreElements()
+		  .Subscribe(
+			  _  =&gt; Console.WriteLine("Never called"),
+			  ex =&gt; Console.WriteLine($"Error: {ex.Message}"),
+			  () =&gt; Console.WriteLine("Never called"));</code></pre>
+		</div>
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunIgnore" disabled="@_ignoreRunning">
+				@if (_ignoreRunning) { <span class="spinner"></span> } else { <span>▶</span> } Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_ignoreOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div><span class="output-dot dot-red"></span><span class="output-dot dot-yellow"></span><span class="output-dot dot-green"></span></div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_ignoreOut)</div>
+		</div>
+	</div>
+
+</div>
+
+@code {
+	private record OutputLine(string Text, string Css);
+
+	private RenderFragment ConsoleBody(List<OutputLine> lines) => builder =>
+	{
+		if (lines.Count == 0)
+		{
+			builder.OpenElement(0, "div"); builder.AddAttribute(1, "class", "output-empty");
+			builder.AddContent(2, "Press Run to execute…"); builder.CloseElement();
+		}
+		else
+		{
+			int seq = 0;
+			foreach (var line in lines)
+			{
+				builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", $"output-line {line.Css}");
+				builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "output-prompt");
+				builder.AddContent(seq++, "›"); builder.CloseElement();
+				builder.OpenElement(seq++, "span"); builder.AddContent(seq++, line.Text); builder.CloseElement();
+				builder.CloseElement();
+			}
+		}
+	};
+
+	private void ClearOutput(List<OutputLine> list) { list.Clear(); StateHasChanged(); }
+	private void Add(List<OutputLine> list, string text, string css = "value") { list.Add(new(text, css)); StateHasChanged(); }
+
+	// Where
+	private readonly List<OutputLine> _whereOut = []; private bool _whereRunning;
+	private async Task RunWhere()
+	{
+		_whereRunning = true; _whereOut.Clear(); StateHasChanged();
+		Add(_whereOut, "— Range(1,10).Where(n%2==0) —", "info");
+		await Observable.Range(1, 10).Where(n => n % 2 == 0).Do(v => Add(_whereOut, $"Next: {v}")).ToList();
+		Add(_whereOut, "Completed ✓", "complete");
+		Add(_whereOut, "— Range(1,20).Where(÷2).Where(÷3) —", "info");
+		await Observable.Range(1, 20).Where(n => n % 2 == 0).Where(n => n % 3 == 0).Do(v => Add(_whereOut, $"Next: {v}")).ToList();
+		Add(_whereOut, "Completed ✓", "complete");
+		Add(_whereOut, "— Filter by property (age >= 18) —", "info");
+		await new[] { ("Alice", 30), ("Bob", 17), ("Carol", 25), ("Dan", 15) }.ToObservable()
+			.Where(x => x.Item2 >= 18).Do(x => Add(_whereOut, $"Next: {x.Item1} (age {x.Item2})")).ToList();
+		Add(_whereOut, "All demos completed ✓", "complete");
+		_whereRunning = false; StateHasChanged();
+	}
+
+	// Take
+	private readonly List<OutputLine> _takeOut = []; private bool _takeRunning;
+	private async Task RunTake()
+	{
+		_takeRunning = true; _takeOut.Clear(); StateHasChanged();
+		Add(_takeOut, "— Range(1,10).Take(3) —", "info");
+		await Observable.Range(1, 10).Take(3).Do(v => Add(_takeOut, $"Next: {v}")).ToList();
+		Add(_takeOut, "Completed ✓", "complete");
+		Add(_takeOut, "— Range(1,10).TakeLast(3) —", "info");
+		await Observable.Range(1, 10).TakeLast(3).Do(v => Add(_takeOut, $"Next: {v}")).ToList();
+		Add(_takeOut, "Completed ✓", "complete");
+		Add(_takeOut, "— Range(1,10).TakeWhile(n<5) —", "info");
+		await Observable.Range(1, 10).TakeWhile(n => n < 5).Do(v => Add(_takeOut, $"Next: {v}")).ToList();
+		Add(_takeOut, "Completed ✓", "complete");
+		Add(_takeOut, "— Interval(200ms).TakeUntil(Timer 750ms) —", "info");
+		var stop = Observable.Timer(TimeSpan.FromMilliseconds(750));
+		await Observable.Interval(TimeSpan.FromMilliseconds(200)).TakeUntil(stop).Do(t => Add(_takeOut, $"Tick {t}")).ToList();
+		Add(_takeOut, "TakeUntil stopped ✓", "complete");
+		_takeRunning = false; StateHasChanged();
+	}
+
+	// Skip
+	private readonly List<OutputLine> _skipOut = []; private bool _skipRunning;
+	private async Task RunSkip()
+	{
+		_skipRunning = true; _skipOut.Clear(); StateHasChanged();
+		Add(_skipOut, "— Range(1,6).Skip(3) —", "info");
+		await Observable.Range(1, 6).Skip(3).Do(v => Add(_skipOut, $"Next: {v}")).ToList();
+		Add(_skipOut, "Completed ✓", "complete");
+		Add(_skipOut, "— Range(1,6).SkipLast(2) —", "info");
+		await Observable.Range(1, 6).SkipLast(2).Do(v => Add(_skipOut, $"Next: {v}")).ToList();
+		Add(_skipOut, "Completed ✓", "complete");
+		Add(_skipOut, "— Range(1,8).SkipWhile(n<5) —", "info");
+		await Observable.Range(1, 8).SkipWhile(n => n < 5).Do(v => Add(_skipOut, $"Next: {v}")).ToList();
+		Add(_skipOut, "Completed ✓", "complete");
+		Add(_skipOut, "— Interval(150ms).SkipUntil(Timer 600ms).Take(3) —", "info");
+		var gate = Observable.Timer(TimeSpan.FromMilliseconds(600));
+		await Observable.Interval(TimeSpan.FromMilliseconds(150)).SkipUntil(gate).Take(3).Do(t => Add(_skipOut, $"Tick {t}")).ToList();
+		Add(_skipOut, "SkipUntil passed 3 ticks ✓", "complete");
+		_skipRunning = false; StateHasChanged();
+	}
+
+	// First/Last
+	private readonly List<OutputLine> _firstOut = []; private bool _firstRunning;
+	private async Task RunFirst()
+	{
+		_firstRunning = true; _firstOut.Clear(); StateHasChanged();
+		var numbers = Observable.Range(1, 5);
+		Add(_firstOut, $"FirstAsync():              {await numbers.FirstAsync()}", "value");
+		Add(_firstOut, $"FirstAsync(n%2==0):        {await numbers.FirstAsync(n => n % 2 == 0)}", "value");
+		Add(_firstOut, $"LastAsync():               {await numbers.LastAsync()}", "value");
+		Add(_firstOut, $"SingleAsync(Return(42)):   {await Observable.Return(42).SingleAsync()}", "value");
+		Add(_firstOut, $"ElementAt(2):              {await numbers.ElementAt(2)}", "value");
+		Add(_firstOut, $"FirstOrDefaultAsync(Empty): {await Observable.Empty<int>().FirstOrDefaultAsync()} (default int)", "value");
+		Add(_firstOut, "All element operators completed ✓", "complete");
+		_firstRunning = false; StateHasChanged();
+	}
+
+	// Distinct
+	private readonly List<OutputLine> _distinctOut = []; private bool _distinctRunning;
+	private async Task RunDistinct()
+	{
+		_distinctRunning = true; _distinctOut.Clear(); StateHasChanged();
+		Add(_distinctOut, "— [1,2,2,3,1,4].Distinct() —", "info");
+		await new[] { 1, 2, 2, 3, 1, 4 }.ToObservable().Distinct().Do(v => Add(_distinctOut, $"Next: {v}")).ToList();
+		Add(_distinctOut, "Completed ✓", "complete");
+		Add(_distinctOut, "— Distinct by key (first name) —", "info");
+		await new[] { ("Alice", 1), ("Bob", 2), ("Alice", 3) }.ToObservable()
+			.Distinct(x => x.Item1).Do(x => Add(_distinctOut, $"Next: {x.Item1} (id={x.Item2})")).ToList();
+		Add(_distinctOut, "Completed ✓", "complete");
+		Add(_distinctOut, "— [1,1,2,3,3,3,2].DistinctUntilChanged() —", "info");
+		await new[] { 1, 1, 2, 3, 3, 3, 2 }.ToObservable().DistinctUntilChanged().Do(v => Add(_distinctOut, $"Next: {v}")).ToList();
+		Add(_distinctOut, "Completed ✓ (trailing 2 passes — prev was 3)", "complete");
+		_distinctRunning = false; StateHasChanged();
+	}
+
+	// Throttle (interactive)
+	private readonly List<OutputLine> _throttleOut = [];
+	private readonly Subject<string>  _throttleSubject = new();
+	private IDisposable? _throttleSub;
+	private void InitThrottle()
+	{
+		_throttleSub = _throttleSubject
+			.Throttle(TimeSpan.FromMilliseconds(300))
+			.DistinctUntilChanged()
+			.Where(t => t.Length > 0)
+			.Subscribe(term =>
+			{
+				_throttleOut.Add(new($"Throttled: \"{term}\"", "value"));
+				if (_throttleOut.Count > 10) _throttleOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			});
+	}
+	private void OnThrottleInput(ChangeEventArgs e) => _throttleSubject.OnNext(e.Value?.ToString() ?? "");
+
+	// Sample
+	private readonly List<OutputLine> _sampleOut = []; private bool _sampleRunning;
+	private async Task RunSample()
+	{
+		_sampleRunning = true; _sampleOut.Clear(); StateHasChanged();
+		Add(_sampleOut, "Fast source (100ms tick), sampled every 500ms × 4…", "info");
+		await Observable.Interval(TimeSpan.FromMilliseconds(100))
+			.Sample(TimeSpan.FromMilliseconds(500)).Take(4)
+			.Do(v => Add(_sampleOut, $"Sample snapshot: tick {v}")).ToList();
+		Add(_sampleOut, "Sample completed ✓", "complete");
+		_sampleRunning = false; StateHasChanged();
+	}
+
+	// IgnoreElements
+	private readonly List<OutputLine> _ignoreOut = []; private bool _ignoreRunning;
+	private async Task RunIgnore()
+	{
+		_ignoreRunning = true; _ignoreOut.Clear(); StateHasChanged();
+		Add(_ignoreOut, "— Range(1,5).IgnoreElements() — only OnCompleted fires —", "info");
+		await Observable.Range(1, 5).IgnoreElements().Do(_ => Add(_ignoreOut, "OnNext (never)")).ToList();
+		Add(_ignoreOut, "OnCompleted received ✓ (zero OnNext calls)", "complete");
+		await Task.Delay(60);
+		Add(_ignoreOut, "— Throw.IgnoreElements() — OnError still propagates —", "info");
+		try { await Observable.Throw<int>(new InvalidOperationException("Boom!")).IgnoreElements().ToList(); }
+		catch (InvalidOperationException ex) { Add(_ignoreOut, $"OnError propagated: {ex.Message} ✓", "complete"); }
+		_ignoreRunning = false; StateHasChanged();
+	}
+
+	// Lifecycle
+	private readonly CompositeDisposable _subs = new();
+	protected override void OnInitialized() { InitThrottle(); if (_throttleSub is not null) _subs.Add(_throttleSub); }
+	protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await JS.InvokeVoidAsync("highlightCode"); }
+	public void Dispose() => _subs.Dispose();
+}

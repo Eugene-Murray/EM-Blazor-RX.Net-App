@@ -1,0 +1,60 @@
+<button class="nav-toggle" aria-label="Toggle navigation" @onclick="ToggleSidebar">
+	<span></span><span></span><span></span>
+</button>
+
+@if (_sidebarOpen)
+{
+	<div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
+}
+
+<aside class="sidebar @(_sidebarOpen ? "sidebar-open" : "")">
+
+	<a href="/" class="sidebar-brand" @onclick="CloseSidebar">
+		<div class="sidebar-brand-icon">⚛️</div>
+		<div>
+			<div class="sidebar-brand-name">Rx.NET</div>
+			<div class="sidebar-brand-sub">in Blazor</div>
+		</div>
+	</a>
+
+	<nav>
+		<div class="sidebar-section">Get Started</div>
+		<NavLink href="" Match="NavLinkMatch.All" @onclick="CloseSidebar">
+			<span class="nav-icon">🏠</span> Introduction
+		</NavLink>
+
+		<div class="sidebar-section">Learn</div>
+		<NavLink href="operators" @onclick="CloseSidebar">
+			<span class="nav-icon">⚡</span> Operators
+		</NavLink>
+		<NavLink href="subjects" @onclick="CloseSidebar">
+			<span class="nav-icon">📡</span> Subjects
+		</NavLink>
+		<NavLink href="recipes" @onclick="CloseSidebar">
+			<span class="nav-icon">🍳</span> Recipes
+		</NavLink>
+	</nav>
+
+	<div class="sidebar-footer">
+		<a href="https://github.com/dotnet/reactive" target="_blank" rel="noopener">
+			<span>🔗</span> dotnet/reactive (GitHub)
+		</a>
+		<a href="https://introtorx.com" target="_blank" rel="noopener">
+			<span>📖</span> Introduction to Rx.NET
+		</a>
+		<a href="https://www.nuget.org/packages/System.Reactive" target="_blank" rel="noopener">
+			<span>📦</span> NuGet — System.Reactive
+		</a>
+		<a href="https://www.learnrxjs.io" target="_blank" rel="noopener">
+			<span>🌐</span> LearnRxJS (inspiration)
+		</a>
+	</div>
+
+</aside>
+
+@code {
+	private bool _sidebarOpen;
+
+	private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+	private void CloseSidebar() => _sidebarOpen = false;
+}

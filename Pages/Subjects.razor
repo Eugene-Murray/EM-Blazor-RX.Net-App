@@ -1,0 +1,540 @@
+@page "/subjects"
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Subjects — Rx.NET in Blazor</PageTitle>
+
+<div class="page-header">
+	<div class="page-header-badge">📡 Reference</div>
+	<h1>Rx.NET Subjects</h1>
+	<p class="lead">
+		A subject is both an <strong>observer</strong> and an <strong>observable</strong> —
+		you push values into it with <code>OnNext</code> and subscribe to it like any other stream.
+		Each variant has different replay and completion semantics.
+	</p>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 Subject
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title">
+	<span class="tag tag-combo">Subject&lt;T&gt;</span> Plain Subject
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			<code>Subject&lt;T&gt;</code> is the simplest subject — it forwards each
+			<code>OnNext</code> call to all <em>current</em> subscribers. Late subscribers
+			receive <strong>no</strong> past values. Think of it as a live event bus.
+		</p>
+	</div>
+</div>
+
+<div class="subject-grid">
+	<div class="subject-card">
+		<div class="subject-card-header">
+			<span class="subject-icon">📨</span>
+			<span class="operator-name">Subject&lt;T&gt;</span>
+		</div>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Live event bus — no replay for late subscribers</span>
+			</div>
+			<pre><code class="language-csharp">var subject = new Subject&lt;int&gt;();
+
+// Early subscriber — sees everything
+subject.Subscribe(v =&gt; Console.WriteLine($"Early: {v}"));
+
+subject.OnNext(1);  // Early: 1
+subject.OnNext(2);  // Early: 2
+
+// Late subscriber — misses 1 and 2
+subject.Subscribe(v =&gt; Console.WriteLine($"Late: {v}"));
+
+subject.OnNext(3);  // Early: 3  |  Late: 3
+subject.OnCompleted();
+
+// Subject can also propagate errors:
+// subject.OnError(new Exception("boom"));</code></pre>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunSubject" disabled="@_subjectRunning">
+				@if (_subjectRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+				Run Demo
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_subjectOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>Subject output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_subjectOut)</div>
+		</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 BehaviorSubject
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title" style="margin-top:2rem;">
+	<span class="tag tag-combo">BehaviorSubject&lt;T&gt;</span> Behaviour Subject
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			<code>BehaviorSubject&lt;T&gt;</code> requires an <em>initial value</em> and
+			replays the <strong>single most recent</strong> value to any new subscriber.
+			Use it whenever a component must always have a current value — e.g. auth state,
+			selected theme, or form values.
+		</p>
+	</div>
+</div>
+
+<div class="subject-grid">
+	<div class="subject-card">
+		<div class="subject-card-header">
+			<span class="subject-icon">🔄</span>
+			<span class="operator-name">BehaviorSubject&lt;T&gt;</span>
+		</div>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Always has a current value — replays it to new subscribers</span>
+			</div>
+			<pre><code class="language-csharp">// Must provide an initial value
+var theme = new BehaviorSubject&lt;string&gt;("light");
+
+// Subscriber A gets "light" immediately (the current value)
+theme.Subscribe(t =&gt; Console.WriteLine($"A: {t}"));
+
+theme.OnNext("dark");   // A: dark
+
+// Subscriber B joins late — still gets "dark" (latest value)
+theme.Subscribe(t =&gt; Console.WriteLine($"B: {t}"));
+
+theme.OnNext("system"); // A: system  |  B: system
+
+// Read current value without subscribing:
+Console.WriteLine(theme.Value); // system</code></pre>
+		</div>
+
+		<!-- Interactive -->
+		<div style="padding:0 1rem .8rem;">
+			<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.4rem;">
+				Interactive — change the theme and observe both early and late subscribers:
+			</p>
+			<div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+				@foreach (var t in new[] { "light", "dark", "system", "high-contrast" })
+				{
+					<button class="btn btn-outline btn-sm" @onclick="() => PushTheme(t)">@t</button>
+				}
+				<button class="btn btn-primary btn-sm" @onclick="AddLateSubscriber">+ Late subscriber</button>
+			</div>
+		</div>
+
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>BehaviorSubject output (current value: @_themeSubject.Value)</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_behaviorOut)</div>
+		</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 ReplaySubject
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title" style="margin-top:2rem;">
+	<span class="tag tag-combo">ReplaySubject&lt;T&gt;</span> Replay Subject
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			<code>ReplaySubject&lt;T&gt;</code> buffers some or all past values and replays them
+			to every new subscriber. Optionally constrain by buffer size
+			(<code>new ReplaySubject&lt;T&gt;(3)</code>) or time window.
+		</p>
+	</div>
+</div>
+
+<div class="subject-grid">
+	<div class="subject-card">
+		<div class="subject-card-header">
+			<span class="subject-icon">⏮</span>
+			<span class="operator-name">ReplaySubject&lt;T&gt;</span>
+		</div>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Buffers past values — late subscribers catch up</span>
+			</div>
+			<pre><code class="language-csharp">// Buffer the last 3 values
+var log = new ReplaySubject&lt;string&gt;(3);
+
+log.OnNext("Event A");
+log.OnNext("Event B");
+log.OnNext("Event C");
+log.OnNext("Event D");   // "A" is evicted from the 3-item buffer
+
+// Late subscriber replays the last 3: B, C, D
+log.Subscribe(e =&gt; Console.WriteLine($"Late: {e}"));
+
+log.OnNext("Event E");   // Late: Event E
+
+// Unbounded (replays everything — use with care):
+var unbounded = new ReplaySubject&lt;int&gt;();
+
+// Time-windowed (replays last 5 seconds of values):
+var windowed = new ReplaySubject&lt;int&gt;(TimeSpan.FromSeconds(5));</code></pre>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunReplay" disabled="@_replayRunning">
+				@if (_replayRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+				Run Demo (buffer=3)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_replayOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>ReplaySubject output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_replayOut)</div>
+		</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 AsyncSubject
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title" style="margin-top:2rem;">
+	<span class="tag tag-combo">AsyncSubject&lt;T&gt;</span> Async Subject
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			<code>AsyncSubject&lt;T&gt;</code> emits only the <strong>last value</strong> —
+			and only after <code>OnCompleted</code> is called. Any subscriber that arrives
+			before or after completion will receive that same single value. Equivalent to a
+			<code>Task&lt;T&gt;</code> in the Rx world.
+		</p>
+	</div>
+</div>
+
+<div class="subject-grid">
+	<div class="subject-card">
+		<div class="subject-card-header">
+			<span class="subject-icon">✅</span>
+			<span class="operator-name">AsyncSubject&lt;T&gt;</span>
+		</div>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Emits only the final value, and only on completion</span>
+			</div>
+			<pre><code class="language-csharp">var async = new AsyncSubject&lt;string&gt;();
+
+// Subscriber A waits for completion
+async.Subscribe(v =&gt; Console.WriteLine($"A: {v}"));
+
+async.OnNext("first");   // nothing emitted yet
+async.OnNext("second");  // nothing emitted yet
+async.OnNext("final");   // nothing emitted yet
+
+// Only NOW does A receive the last value:
+async.OnCompleted();     // A: final
+
+// Subscriber B joins AFTER completion — still gets the cached last value:
+async.Subscribe(v =&gt; Console.WriteLine($"B: {v}"));
+// B: final</code></pre>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunAsync" disabled="@_asyncRunning">
+				@if (_asyncRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+				Run Demo
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_asyncOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>AsyncSubject output</span>
+			</div>
+			<div class="output-console-body">@ConsoleBody(_asyncOut)</div>
+		</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 Comparison table
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title" style="margin-top:2rem;">📊 Quick Comparison</div>
+
+<div class="comparison-table-wrap">
+	<table class="comparison-table">
+		<thead>
+			<tr>
+				<th>Subject</th>
+				<th>Initial value?</th>
+				<th>Replays to late subscribers</th>
+				<th>Best used for</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td><code>Subject&lt;T&gt;</code></td>
+				<td>No</td>
+				<td>None (missed events are gone)</td>
+				<td>Event bus, UI event bridging</td>
+			</tr>
+			<tr>
+				<td><code>BehaviorSubject&lt;T&gt;</code></td>
+				<td><strong>Yes</strong></td>
+				<td>Last 1 value</td>
+				<td>Auth state, selected theme, form model</td>
+			</tr>
+			<tr>
+				<td><code>ReplaySubject&lt;T&gt;</code></td>
+				<td>No</td>
+				<td>Last N values (or time window)</td>
+				<td>Audit log, late-join catch-up</td>
+			</tr>
+			<tr>
+				<td><code>AsyncSubject&lt;T&gt;</code></td>
+				<td>No</td>
+				<td>Last value on completion</td>
+				<td>One-shot async result (like Task&lt;T&gt;)</td>
+			</tr>
+		</tbody>
+	</table>
+</div>
+
+@code {
+	// ── Shared helpers ────────────────────────────────────────────────────────
+	private record OutputLine(string Text, string Css);
+
+	private RenderFragment ConsoleBody(List<OutputLine> lines) => builder =>
+	{
+		if (lines.Count == 0)
+		{
+			builder.OpenElement(0, "div");
+			builder.AddAttribute(1, "class", "output-empty");
+			builder.AddContent(2, "Press Run to execute…");
+			builder.CloseElement();
+		}
+		else
+		{
+			int seq = 0;
+			foreach (var line in lines)
+			{
+				builder.OpenElement(seq++, "div");
+				builder.AddAttribute(seq++, "class", $"output-line {line.Css}");
+				builder.OpenElement(seq++, "span");
+				builder.AddAttribute(seq++, "class", "output-prompt");
+				builder.AddContent(seq++, "›");
+				builder.CloseElement();
+				builder.OpenElement(seq++, "span");
+				builder.AddContent(seq++, line.Text);
+				builder.CloseElement();
+				builder.CloseElement();
+			}
+		}
+	};
+
+	private void ClearOutput(List<OutputLine> list) { list.Clear(); StateHasChanged(); }
+	private void Add(List<OutputLine> list, string text, string css = "value")
+	{
+		list.Add(new(text, css));
+		StateHasChanged();
+	}
+
+	// ── Subject demo ──────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _subjectOut = [];
+	private bool _subjectRunning;
+
+	private async Task RunSubject()
+	{
+		_subjectRunning = true;
+		_subjectOut.Clear();
+		StateHasChanged();
+
+		var subject = new Subject<int>();
+
+		var earlySub = subject.Subscribe(v => Add(_subjectOut, $"Early subscriber: {v}"));
+
+		Add(_subjectOut, "OnNext(1)", "info");
+		subject.OnNext(1);
+		await Task.Delay(200);
+
+		Add(_subjectOut, "OnNext(2)", "info");
+		subject.OnNext(2);
+		await Task.Delay(200);
+
+		Add(_subjectOut, "— Late subscriber joins now —", "info");
+		var lateSub = subject.Subscribe(v => Add(_subjectOut, $"Late subscriber:  {v}", "complete"));
+
+		Add(_subjectOut, "OnNext(3)", "info");
+		subject.OnNext(3);
+		await Task.Delay(200);
+
+		subject.OnCompleted();
+		Add(_subjectOut, "OnCompleted() ✓", "complete");
+
+		earlySub.Dispose();
+		lateSub.Dispose();
+		_subjectRunning = false;
+		StateHasChanged();
+	}
+
+	// ── BehaviorSubject demo ──────────────────────────────────────────────────
+	private readonly List<OutputLine>         _behaviorOut   = [];
+	private readonly BehaviorSubject<string>  _themeSubject  = new("light");
+	private readonly CompositeDisposable      _behaviorSubs  = new();
+	private int _lateSubCount;
+
+	private void InitBehavior()
+	{
+		// Subscriber A (always present)
+		_behaviorSubs.Add(
+			_themeSubject.Subscribe(t =>
+			{
+				_behaviorOut.Add(new($"Subscriber A: {t}", "value"));
+				if (_behaviorOut.Count > 14) _behaviorOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			}));
+	}
+
+	private void PushTheme(string theme) => _themeSubject.OnNext(theme);
+
+	private void AddLateSubscriber()
+	{
+		int num = ++_lateSubCount;
+		_behaviorSubs.Add(
+			_themeSubject.Subscribe(t =>
+			{
+				_behaviorOut.Add(new($"Late#{num}: {t}", "complete"));
+				if (_behaviorOut.Count > 14) _behaviorOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			}));
+		Add(_behaviorOut, $"— Late subscriber #{num} joined (replays current: {_themeSubject.Value}) —", "info");
+	}
+
+	// ── ReplaySubject demo ────────────────────────────────────────────────────
+	private readonly List<OutputLine> _replayOut = [];
+	private bool _replayRunning;
+
+	private async Task RunReplay()
+	{
+		_replayRunning = true;
+		_replayOut.Clear();
+		StateHasChanged();
+
+		var replay = new ReplaySubject<string>(3);
+
+		Add(_replayOut, "Pushing Event A, B, C, D (buffer=3, A evicted)…", "info");
+		replay.OnNext("Event A");
+		replay.OnNext("Event B");
+		replay.OnNext("Event C");
+		replay.OnNext("Event D");
+		await Task.Delay(150);
+
+		Add(_replayOut, "— Late subscriber joins (replays last 3) —", "info");
+		await Task.Delay(100);
+		replay.Subscribe(e => Add(_replayOut, $"Late: {e}", "complete"));
+
+		Add(_replayOut, "Pushing Event E…", "info");
+		await Task.Delay(100);
+		replay.OnNext("Event E");
+		replay.OnCompleted();
+
+		Add(_replayOut, "Completed ✓", "complete");
+		_replayRunning = false;
+		StateHasChanged();
+	}
+
+	// ── AsyncSubject demo ─────────────────────────────────────────────────────
+	private readonly List<OutputLine> _asyncOut = [];
+	private bool _asyncRunning;
+
+	private async Task RunAsync()
+	{
+		_asyncRunning = true;
+		_asyncOut.Clear();
+		StateHasChanged();
+
+		var asyncSubject = new AsyncSubject<string>();
+
+		Add(_asyncOut, "Subscriber A watches (nothing emitted until OnCompleted)…", "info");
+		asyncSubject.Subscribe(v => Add(_asyncOut, $"A: {v}"));
+
+		foreach (var val in new[] { "first", "second", "final" })
+		{
+			Add(_asyncOut, $"OnNext(\"{val}\") — no emission yet", "info");
+			asyncSubject.OnNext(val);
+			await Task.Delay(300);
+		}
+
+		Add(_asyncOut, "OnCompleted() — now A receives last value:", "info");
+		asyncSubject.OnCompleted();
+		await Task.Delay(100);
+
+		Add(_asyncOut, "— Subscriber B joins after completion —", "info");
+		asyncSubject.Subscribe(v => Add(_asyncOut, $"B: {v} (cached last value)", "complete"));
+		await Task.Delay(50);
+
+		Add(_asyncOut, "Done ✓", "complete");
+		_asyncRunning = false;
+		StateHasChanged();
+	}
+
+	// ── Lifecycle ─────────────────────────────────────────────────────────────
+	private readonly CompositeDisposable _subs = new();
+
+	protected override void OnInitialized()
+	{
+		InitBehavior();
+		_subs.Add(_behaviorSubs);
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+			await JS.InvokeVoidAsync("highlightCode");
+	}
+
+	public void Dispose() => _subs.Dispose();
+}

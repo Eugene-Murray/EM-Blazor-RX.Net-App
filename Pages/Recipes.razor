@@ -1,0 +1,634 @@
+@page "/recipes"
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Recipes — Rx.NET in Blazor</PageTitle>
+
+<div class="page-header">
+	<div class="page-header-badge">🍳 Patterns</div>
+	<h1>Rx.NET Recipes</h1>
+	<p class="lead">
+		Real-world reactive patterns for Blazor — each recipe solves a common UI or
+		data-flow problem with a runnable live demo you can try right here.
+	</p>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 1. Type-ahead search
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title">
+	<span class="recipe-badge">01</span> Type-ahead Search with Debounce &amp; Switch
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			Debounce the user's keystrokes with <code>Throttle</code>, suppress duplicates with
+			<code>DistinctUntilChanged</code>, then use <code>Switch</code> to cancel any
+			in-flight request when a new term arrives — exactly like a professional autocomplete.
+		</p>
+	</div>
+</div>
+
+<div class="recipe-card">
+	<div class="code-block">
+		<div class="code-block-header">
+			<span class="code-lang-badge">C#</span>
+			<span>Typeahead — debounce + switch pattern</span>
+		</div>
+		<pre><code class="language-csharp">var searchTerms = new Subject&lt;string&gt;();
+
+searchTerms
+	.Throttle(TimeSpan.FromMilliseconds(300))   // wait until typing pauses
+	.DistinctUntilChanged()                      // skip unchanged term
+	.Select(term =&gt; SearchApi(term))             // project to inner observable
+	.Switch()                                    // cancel previous, keep latest
+	.Subscribe(results =&gt; UpdateUI(results));
+
+// Wire to input:
+// @@oninput="e =&gt; searchTerms.OnNext(e.Value?.ToString() ?? "")"</code></pre>
+	</div>
+
+	<div style="padding:0 1rem .8rem;">
+		<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.4rem;">
+			Try it — type in the box and see how only the final debounced term triggers a simulated search:
+		</p>
+		<input class="recipe-input" placeholder="Type a query…" @oninput="OnTypeaheadInput" />
+	</div>
+
+	<div class="output-console">
+		<div class="output-console-header">
+			<div>
+				<span class="output-dot dot-red"></span>
+				<span class="output-dot dot-yellow"></span>
+				<span class="output-dot dot-green"></span>
+			</div>
+			<span>Typeahead output (300 ms debounce)</span>
+		</div>
+		<div class="output-console-body">@ConsoleBody(_typeaheadOut)</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 2. Polling with retry
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title" style="margin-top:2rem;">
+	<span class="recipe-badge">02</span> Periodic Polling with Auto-Retry
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			Use <code>Observable.Interval</code> to poll an endpoint at a regular cadence.
+			Wrap in <code>Catch</code> and <code>RetryWhen</code> to recover from transient
+			errors without stopping the poll loop.
+		</p>
+	</div>
+</div>
+
+<div class="recipe-card">
+	<div class="code-block">
+		<div class="code-block-header">
+			<span class="code-lang-badge">C#</span>
+			<span>Poll every 5 s — retry on error with exponential back-off</span>
+		</div>
+		<pre><code class="language-csharp">var poller = Observable
+	.Interval(TimeSpan.FromSeconds(5))
+	.SelectMany(_ =&gt; Observable.FromAsync(FetchDataAsync)
+							   .Catch&lt;Data, Exception&gt;(ex =&gt;
+							   {
+								   LogError(ex);
+								   return Observable.Empty&lt;Data&gt;(); // skip this tick
+							   }))
+	.Subscribe(data =&gt; UpdateDashboard(data));
+
+// Remember to dispose when the component is destroyed:
+// protected override void Dispose() =&gt; poller.Dispose();</code></pre>
+	</div>
+
+	<div class="btn-group">
+		<button class="btn btn-primary btn-sm" @onclick="StartPolling" disabled="@_pollingActive">
+			@if (_pollingActive) { <span class="spinner"></span> } else { <span>▶</span> }
+			@(_pollingActive ? "Polling…" : "Start Polling (1 s)")
+		</button>
+		<button class="btn btn-outline btn-sm" @onclick="StopPolling" disabled="@(!_pollingActive)">⏹ Stop</button>
+		<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_pollingOut)">Clear</button>
+	</div>
+	<div class="output-console">
+		<div class="output-console-header">
+			<div>
+				<span class="output-dot dot-red"></span>
+				<span class="output-dot dot-yellow"></span>
+				<span class="output-dot dot-green"></span>
+			</div>
+			<span>Polling output</span>
+		</div>
+		<div class="output-console-body">@ConsoleBody(_pollingOut)</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 3. Retry with exponential back-off
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title" style="margin-top:2rem;">
+	<span class="recipe-badge">03</span> Retry with Exponential Back-off
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			<code>RetryWhen</code> gives you full control over the retry timing. Combine it
+			with <code>Zip</code> against an infinite back-off sequence to get classic
+			exponential back-off (1 s, 2 s, 4 s, 8 s…).
+		</p>
+	</div>
+</div>
+
+<div class="recipe-card">
+	<div class="code-block">
+		<div class="code-block-header">
+			<span class="code-lang-badge">C#</span>
+			<span>Exponential back-off using RetryWhen + Zip</span>
+		</div>
+		<pre><code class="language-csharp">static IObservable&lt;T&gt; WithExponentialBackoff&lt;T&gt;(
+	IObservable&lt;T&gt; source, int maxRetries = 4)
+{
+	return source.RetryWhen(errors =&gt;
+		errors.Zip(
+			// 1s, 2s, 4s, 8s back-off delays
+			Observable.Range(1, maxRetries)
+					  .Select(n =&gt; TimeSpan.FromSeconds(Math.Pow(2, n - 1))),
+			(error, delay) =&gt; delay)
+		.SelectMany(delay =&gt; Observable.Timer(delay)));
+}
+
+// Usage:
+WithExponentialBackoff(FetchFromApi(), maxRetries: 4)
+	.Subscribe(
+		result =&gt; Console.WriteLine($"Success: {result}"),
+		error  =&gt; Console.WriteLine($"Failed after retries: {error.Message}"));</code></pre>
+		</div>
+
+	<div class="btn-group">
+		<button class="btn btn-primary btn-sm" @onclick="RunRetry" disabled="@_retryRunning">
+			@if (_retryRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+			Simulate flaky call (fails twice, then succeeds)
+		</button>
+		<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_retryOut)">Clear</button>
+	</div>
+	<div class="output-console">
+		<div class="output-console-header">
+			<div>
+				<span class="output-dot dot-red"></span>
+				<span class="output-dot dot-yellow"></span>
+				<span class="output-dot dot-green"></span>
+			</div>
+			<span>Retry with back-off output</span>
+		</div>
+		<div class="output-console-body">@ConsoleBody(_retryOut)</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 4. Progress tracking
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title" style="margin-top:2rem;">
+	<span class="recipe-badge">04</span> Progress Tracking with Scan
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			<code>Scan</code> is the Rx equivalent of LINQ's <code>Aggregate</code> but
+			emits intermediate accumulations. Use it to track running totals, progress
+			percentages, or any state that evolves item-by-item.
+		</p>
+	</div>
+</div>
+
+<div class="recipe-card">
+	<div class="code-block">
+		<div class="code-block-header">
+			<span class="code-lang-badge">C#</span>
+			<span>Track upload progress with Scan</span>
+		</div>
+		<pre><code class="language-csharp">var fileChunks = new Subject&lt;int&gt;(); // each value = bytes uploaded in this chunk
+int totalBytes = 1_000_000;
+
+fileChunks
+	.Scan(0, (acc, chunk) =&gt; acc + chunk)           // running total
+	.Select(uploaded =&gt; (double)uploaded / totalBytes * 100)
+	.Subscribe(pct =&gt; UpdateProgressBar(pct));
+
+// Fire chunks as they arrive:
+fileChunks.OnNext(128_000);  // 12.8%
+fileChunks.OnNext(256_000);  // 38.4%
+fileChunks.OnNext(512_000);  // 89.6%
+fileChunks.OnNext(104_000);  // 100%
+fileChunks.OnCompleted();</code></pre>
+	</div>
+
+	<div class="btn-group">
+		<button class="btn btn-primary btn-sm" @onclick="RunProgress" disabled="@_progressRunning">
+			@if (_progressRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+			Simulate Upload
+		</button>
+		<button class="btn btn-outline btn-sm" @onclick="ResetProgress">Reset</button>
+	</div>
+
+	@if (_progressRunning || _progressPct > 0)
+	{
+		<div style="padding:.6rem 1rem;">
+			<div style="background:var(--border);border-radius:4px;height:14px;overflow:hidden;">
+				<div style="background:var(--accent);height:100%;width:@(_progressPct.ToString("F0"))%;transition:width .25s ease;"></div>
+			</div>
+			<div style="font-size:.78rem;color:var(--text-muted);margin-top:.3rem;">@_progressPct.ToString("F1")% uploaded</div>
+		</div>
+	}
+
+	<div class="output-console">
+		<div class="output-console-header">
+			<div>
+				<span class="output-dot dot-red"></span>
+				<span class="output-dot dot-yellow"></span>
+				<span class="output-dot dot-green"></span>
+			</div>
+			<span>Progress output</span>
+		</div>
+		<div class="output-console-body">@ConsoleBody(_progressOut)</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+	 5. Reactive shopping cart
+	 ════════════════════════════════════════════════════════════════════ -->
+<div class="section-title" style="margin-top:2rem;">
+	<span class="recipe-badge">05</span> Reactive Shopping Cart with CombineLatest
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			Compose multiple <code>BehaviorSubject</code> streams (price, quantity, discount)
+			with <code>CombineLatest</code> to derive a live total that updates automatically
+			whenever any input changes — no manual recalculation needed.
+		</p>
+	</div>
+</div>
+
+<div class="recipe-card">
+	<div class="code-block">
+		<div class="code-block-header">
+			<span class="code-lang-badge">C#</span>
+			<span>Three reactive inputs → derived total</span>
+		</div>
+		<pre><code class="language-csharp">var price    = new BehaviorSubject&lt;decimal&gt;(29.99m);
+var quantity = new BehaviorSubject&lt;int&gt;(1);
+var discount = new BehaviorSubject&lt;decimal&gt;(0m);   // 0–1 (fraction)
+
+// Recalculates whenever any input changes
+price.CombineLatest(quantity, discount,
+	(p, q, d) =&gt; p * q * (1 - d))
+	.Subscribe(total =&gt; lblTotal.Text = $"{total:C2}");
+
+price.OnNext(24.99m);   // total updates
+quantity.OnNext(3);     // total updates
+discount.OnNext(0.10m); // 10% off — total updates</code></pre>
+	</div>
+
+	<div style="padding:0 1rem .8rem;">
+		<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem;">Interactive — adjust all three inputs:</p>
+		<div style="display:flex;gap:1.2rem;flex-wrap:wrap;align-items:flex-start;">
+			<label style="font-size:.82rem;">
+				💰 Price: <strong>@_cartPrice.ToString("C2")</strong>
+				<input type="range" min="1" max="100" step="1"
+					   value="@((int)_cartPrice)"
+					   @oninput="e => OnCartPriceChange(e)"
+					   style="display:block;width:140px;" />
+			</label>
+			<label style="font-size:.82rem;">
+				📦 Qty: <strong>@_cartQty</strong>
+				<input type="range" min="1" max="20" step="1"
+					   value="@_cartQty"
+					   @oninput="e => OnCartQtyChange(e)"
+					   style="display:block;width:140px;" />
+			</label>
+			<label style="font-size:.82rem;">
+				🏷 Discount: <strong>@((_cartDiscount * 100).ToString("F0"))%</strong>
+				<input type="range" min="0" max="50" step="5"
+					   value="@((int)(_cartDiscount * 100))"
+					   @oninput="e => OnCartDiscountChange(e)"
+					   style="display:block;width:140px;" />
+			</label>
+		</div>
+		<div style="margin-top:.6rem;font-size:1.1rem;font-weight:600;color:var(--accent);">
+			Total: @_cartTotal.ToString("C2")
+		</div>
+	</div>
+
+	<div class="output-console">
+		<div class="output-console-header">
+			<div>
+				<span class="output-dot dot-red"></span>
+				<span class="output-dot dot-yellow"></span>
+				<span class="output-dot dot-green"></span>
+			</div>
+			<span>CombineLatest cart log</span>
+		</div>
+		<div class="output-console-body">@ConsoleBody(_cartOut)</div>
+	</div>
+</div>
+
+@code {
+	// ── Shared helpers ────────────────────────────────────────────────────────
+	private record OutputLine(string Text, string Css);
+
+	private RenderFragment ConsoleBody(List<OutputLine> lines) => builder =>
+	{
+		if (lines.Count == 0)
+		{
+			builder.OpenElement(0, "div");
+			builder.AddAttribute(1, "class", "output-empty");
+			builder.AddContent(2, "Waiting for input…");
+			builder.CloseElement();
+		}
+		else
+		{
+			int seq = 0;
+			foreach (var line in lines)
+			{
+				builder.OpenElement(seq++, "div");
+				builder.AddAttribute(seq++, "class", $"output-line {line.Css}");
+				builder.OpenElement(seq++, "span");
+				builder.AddAttribute(seq++, "class", "output-prompt");
+				builder.AddContent(seq++, "›");
+				builder.CloseElement();
+				builder.OpenElement(seq++, "span");
+				builder.AddContent(seq++, line.Text);
+				builder.CloseElement();
+				builder.CloseElement();
+			}
+		}
+	};
+
+	private void ClearOutput(List<OutputLine> list) { list.Clear(); StateHasChanged(); }
+	private void Add(List<OutputLine> list, string text, string css = "value")
+	{
+		list.Add(new(text, css));
+		if (list.Count > 15) list.RemoveAt(0);
+		StateHasChanged();
+	}
+
+	// ── Recipe 1: Typeahead ───────────────────────────────────────────────────
+	private readonly List<OutputLine> _typeaheadOut   = [];
+	private readonly Subject<string>  _typeaheadTerms = new();
+	private int _typeaheadReqNum;
+	private IDisposable? _typeaheadSub;
+
+	private void InitTypeahead()
+	{
+		_typeaheadSub = _typeaheadTerms
+			.Throttle(TimeSpan.FromMilliseconds(300))
+			.DistinctUntilChanged()
+			.Where(t => t.Length > 0)
+			.Do(term =>
+			{
+				_typeaheadOut.Add(new($"Searching for '{term}'…", "info"));
+				if (_typeaheadOut.Count > 15) _typeaheadOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			})
+			.Select(term =>
+			{
+				int req = ++_typeaheadReqNum;
+				return Observable.FromAsync(async () =>
+				{
+					await Task.Delay(250);
+					return (term, req);
+				});
+			})
+			.Switch()
+			.Subscribe(x =>
+			{
+				_typeaheadOut.Add(new($"✅ Results for '{x.term}' (req #{x.req})", "value"));
+				if (_typeaheadOut.Count > 15) _typeaheadOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			});
+	}
+
+	private void OnTypeaheadInput(ChangeEventArgs e) =>
+		_typeaheadTerms.OnNext(e.Value?.ToString() ?? "");
+
+	// ── Recipe 2: Polling ─────────────────────────────────────────────────────
+	private readonly List<OutputLine> _pollingOut = [];
+	private bool _pollingActive;
+	private int  _pollTick;
+	private IDisposable? _pollingSub;
+	private readonly Random _rng = new();
+
+	private void StartPolling()
+	{
+		if (_pollingActive) return;
+		_pollingActive = true;
+		_pollingSub = Observable
+			.Interval(TimeSpan.FromSeconds(1))
+			.SelectMany(_ => Observable.FromAsync(async () =>
+			{
+				await Task.Delay(80);
+				if (_rng.Next(5) == 0) throw new Exception("transient error");
+				return $"tick {++_pollTick} — value={_rng.Next(100)}";
+			}).Catch<string, Exception>(ex =>
+			{
+				InvokeAsync(() => { Add(_pollingOut, $"⚠ {ex.Message} — skipping tick", "info"); return Task.CompletedTask; });
+				return Observable.Empty<string>();
+			}))
+			.Subscribe(result =>
+			{
+				_pollingOut.Add(new(result, "value"));
+				if (_pollingOut.Count > 12) _pollingOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			});
+	}
+
+	private void StopPolling()
+	{
+		_pollingSub?.Dispose();
+		_pollingActive = false;
+		Add(_pollingOut, "Polling stopped ✓", "complete");
+	}
+
+	// ── Recipe 3: Retry with back-off ─────────────────────────────────────────
+	private readonly List<OutputLine> _retryOut = [];
+	private bool _retryRunning;
+	private int  _flakeAttempt;
+
+	private async Task RunRetry()
+	{
+		_retryRunning = true;
+		_retryOut.Clear();
+		_flakeAttempt = 0;
+		StateHasChanged();
+
+		IObservable<string> FlakeyCall() =>
+			Observable.FromAsync(async () =>
+			{
+				await Task.Delay(200);
+				_flakeAttempt++;
+				if (_flakeAttempt < 3)
+					throw new Exception($"Network error (attempt {_flakeAttempt})");
+				return $"Success on attempt {_flakeAttempt}!";
+			});
+
+		IObservable<T> WithBackoff<T>(IObservable<T> source) =>
+			source.RetryWhen(errors =>
+				errors.Zip(
+					Observable.Range(1, 4).Select(n => TimeSpan.FromMilliseconds(500 * n)),
+					(err, delay) =>
+					{
+						Add(_retryOut, $"Error: {err.Message} — retrying in {delay.TotalMilliseconds:F0}ms…", "info");
+						return delay;
+					})
+				.SelectMany(delay => Observable.Timer(delay)));
+
+		try
+		{
+			var result = await WithBackoff(FlakeyCall()).FirstAsync();
+			Add(_retryOut, $"✅ {result}", "complete");
+		}
+		catch (Exception ex)
+		{
+			Add(_retryOut, $"❌ Gave up: {ex.Message}", "info");
+		}
+
+		_retryRunning = false;
+		StateHasChanged();
+	}
+
+	// ── Recipe 4: Progress ────────────────────────────────────────────────────
+	private readonly List<OutputLine> _progressOut = [];
+	private bool _progressRunning;
+	private double _progressPct;
+
+	private async Task RunProgress()
+	{
+		_progressRunning = true;
+		_progressPct = 0;
+		_progressOut.Clear();
+		StateHasChanged();
+
+		var chunks = new Subject<int>();
+		const int total = 1_000_000;
+
+		var sub = chunks
+			.Scan(0, (acc, chunk) => acc + chunk)
+			.Select(uploaded => (double)uploaded / total * 100)
+			.Subscribe(pct =>
+			{
+				_progressPct = pct;
+				Add(_progressOut, $"Uploaded {pct:F1}%  ({(int)(pct * total / 100):N0} / {total:N0} bytes)");
+			});
+
+		foreach (var chunk in new[] { 128_000, 256_000, 256_000, 256_000, 104_000 })
+		{
+			await Task.Delay(400);
+			chunks.OnNext(chunk);
+		}
+
+		chunks.OnCompleted();
+		sub.Dispose();
+
+		Add(_progressOut, "Upload complete ✓", "complete");
+		_progressRunning = false;
+		StateHasChanged();
+	}
+
+	private void ResetProgress()
+	{
+		_progressPct = 0;
+		_progressOut.Clear();
+		StateHasChanged();
+	}
+
+	// ── Recipe 5: Shopping cart ───────────────────────────────────────────────
+	private readonly List<OutputLine>        _cartOut          = [];
+	private decimal _cartPrice    = 29.99m;
+	private int     _cartQty      = 1;
+	private decimal _cartDiscount = 0m;
+	private decimal _cartTotal    = 29.99m;
+
+	private readonly BehaviorSubject<decimal> _cartPriceSubject    = new(29.99m);
+	private readonly BehaviorSubject<int>     _cartQtySubject      = new(1);
+	private readonly BehaviorSubject<decimal> _cartDiscountSubject = new(0m);
+	private IDisposable? _cartSub;
+
+	private void InitCart()
+	{
+		_cartSub = _cartPriceSubject
+			.CombineLatest(_cartQtySubject, _cartDiscountSubject,
+				(p, q, d) => (Price: p, Qty: q, Discount: d, Total: p * q * (1 - d)))
+			.Subscribe(x =>
+			{
+				_cartTotal = x.Total;
+				_cartOut.Add(new(
+					$"Price={x.Price:C2} × Qty={x.Qty} × (1−{x.Discount * 100:F0}%) = {x.Total:C2}",
+					"value"));
+				if (_cartOut.Count > 12) _cartOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			});
+	}
+
+	private void OnCartPriceChange(ChangeEventArgs e)
+	{
+		if (int.TryParse(e.Value?.ToString(), out var v))
+		{
+			_cartPrice = v;
+			_cartPriceSubject.OnNext(_cartPrice);
+		}
+	}
+
+	private void OnCartQtyChange(ChangeEventArgs e)
+	{
+		if (int.TryParse(e.Value?.ToString(), out var v))
+		{
+			_cartQty = v;
+			_cartQtySubject.OnNext(_cartQty);
+		}
+	}
+
+	private void OnCartDiscountChange(ChangeEventArgs e)
+	{
+		if (int.TryParse(e.Value?.ToString(), out var v))
+		{
+			_cartDiscount = v / 100m;
+			_cartDiscountSubject.OnNext(_cartDiscount);
+		}
+	}
+
+	// ── Lifecycle ─────────────────────────────────────────────────────────────
+	private readonly CompositeDisposable _subs = new();
+
+	protected override void OnInitialized()
+	{
+		InitTypeahead();
+		InitCart();
+
+		if (_typeaheadSub is not null) _subs.Add(_typeaheadSub);
+		if (_cartSub      is not null) _subs.Add(_cartSub);
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+			await JS.InvokeVoidAsync("highlightCode");
+	}
+
+	public void Dispose()
+	{
+		_subs.Dispose();
+		_pollingSub?.Dispose();
+	}
+}

@@ -1,0 +1,990 @@
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="section-title">
+	<span class="tag tag-combo">Combination</span> Combining Observables
+</div>
+
+<div class="info-box note">
+	<span class="info-box-icon">💡</span>
+	<div class="info-box-content">
+		<p>
+			Combination operators take <em>two or more</em> source observables and produce a single
+			output stream. The key difference between them is <strong>when</strong> they emit —
+			on the first arrival (<code>Merge</code>), only when all have a new value (<code>Zip</code>),
+			or whenever any source changes (<code>CombineLatest</code>).
+		</p>
+	</div>
+</div>
+
+<div class="operator-grid">
+
+	<!-- ── Merge ──────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">Merge</span>
+		</div>
+		<p class="operator-desc">
+			Subscribes to all sources <em>simultaneously</em> and emits each value as soon as it
+			arrives — output order follows arrival time, not source order.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Two concurrent streams merged into one</span>
+			</div>
+			<pre><code class="language-csharp">// Source A fires every 300 ms, source B every 500 ms
+IObservable&lt;string&gt; sourceA =
+	Observable.Interval(TimeSpan.FromMilliseconds(300))
+			  .Take(4)
+			  .Select(i =&gt; $"A{i}");
+
+IObservable&lt;string&gt; sourceB =
+	Observable.Interval(TimeSpan.FromMilliseconds(500))
+			  .Take(3)
+			  .Select(i =&gt; $"B{i}");
+
+// Both fire concurrently — values interleave by time
+sourceA.Merge(sourceB)
+	   .Subscribe(
+		   v  =&gt; Console.WriteLine(v),
+		   () =&gt; Console.WriteLine("Completed"));
+
+// Typical output: A0, A1, B0, A2, B1, A3, B2, Completed</code></pre>
+		</div>
+
+		<div class="info-box info" style="margin:0 1rem .6rem;">
+			<span class="info-box-icon">ℹ️</span>
+			<div class="info-box-content">
+				<p>
+					The demo below uses 300 ms / 500 ms intervals. Hit <strong>Run</strong> and watch
+					values from both streams interleave in real time.
+				</p>
+			</div>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunMerge" disabled="@_mergeRunning">
+				@if (_mergeRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+				Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_mergeOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_mergeOut)
+			</div>
+		</div>
+	</div>
+
+	<!-- ── Concat ─────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">Concat</span>
+		</div>
+		<p class="operator-desc">
+			Subscribes to sources <em>sequentially</em> — waits for each to complete before
+			subscribing to the next. Output order is always deterministic.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Sequential subscription — order guaranteed</span>
+			</div>
+			<pre><code class="language-csharp">IObservable&lt;string&gt; first  = Observable.Range(1, 3).Select(i =&gt; $"First-{i}");
+IObservable&lt;string&gt; second = Observable.Range(1, 3).Select(i =&gt; $"Second-{i}");
+IObservable&lt;string&gt; third  = Observable.Range(1, 2).Select(i =&gt; $"Third-{i}");
+
+// first must complete before second subscribes, and so on
+first.Concat(second)
+	 .Concat(third)
+	 .Subscribe(
+		 v  =&gt; Console.WriteLine(v),
+		 () =&gt; Console.WriteLine("All completed"));
+
+// First-1, First-2, First-3, Second-1 … Third-2, All completed
+
+// Alternatively with Observable.Concat() static overload:
+Observable.Concat(first, second, third).Subscribe(…);</code></pre>
+		</div>
+
+		<div class="info-box tip" style="margin:0 1rem .6rem;">
+			<span class="info-box-icon">✅</span>
+			<div class="info-box-content">
+				<p>
+					<strong>Use Concat when order matters</strong> — e.g. loading a cache first,
+					then falling back to a live API. Contrast with <code>Merge</code> which is
+					unordered.
+				</p>
+			</div>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunConcat" disabled="@_concatRunning">
+				@if (_concatRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+				Run
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_concatOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_concatOut)
+			</div>
+		</div>
+	</div>
+
+	<!-- ── Zip ────────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">Zip</span>
+		</div>
+		<p class="operator-desc">
+			Pairs values from two (or more) sources <em>positionally</em>. Emits only when
+			<em>every</em> source has produced its nth value — like zipping a jacket.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Positional pairing — waits for all sources</span>
+			</div>
+			<pre><code class="language-csharp">var numbers = Observable.Range(1, 5);
+var letters = new[] { "A", "B", "C", "D", "E" }.ToObservable();
+var symbols = new[] { "!", "@@", "#", "$", "%" }.ToObservable();
+
+// Classic two-source zip
+numbers.Zip(letters, (n, l) =&gt; $"{n}-{l}")
+	   .Subscribe(Console.WriteLine);
+// 1-A, 2-B, 3-C, 4-D, 5-E
+
+// Three-source zip using Observable.Zip
+Observable.Zip(numbers, letters, symbols,
+			   (n, l, s) =&gt; $"{n}{l}{s}")
+		  .Subscribe(Console.WriteLine);
+// 1A!, 2B@@, 3C#, 4D$, 5E%
+
+// Zip stops at the SHORTER source — extra values are discarded
+Observable.Range(1, 10).Zip(letters, (n, l) =&gt; $"{n}-{l}")
+		  .Subscribe(Console.WriteLine);
+// 1-A … 5-E  (stops after 5 because letters is shorter)</code></pre>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunZip" disabled="@_zipRunning">
+				@if (_zipRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+				Run (3 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_zipOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_zipOut)
+			</div>
+		</div>
+	</div>
+
+	<!-- ── CombineLatest ──────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">CombineLatest</span>
+		</div>
+		<p class="operator-desc">
+			When <em>any</em> source emits, combines it with the most recent value from every
+			other source. Ideal for reactive UI state — e.g. price × quantity totals.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Reactive shopping cart — price × quantity</span>
+			</div>
+			<pre><code class="language-csharp">var price    = new BehaviorSubject&lt;decimal&gt;(10m);
+var quantity = new BehaviorSubject&lt;int&gt;(1);
+
+// Recalculate whenever price OR quantity changes
+price.CombineLatest(quantity, (p, q) =&gt; p * q)
+	 .Subscribe(total =&gt; Console.WriteLine($"Total: {total:C2}"));
+
+// Total: £10.00  ← initial combination
+price.OnNext(15m);    // Total: £15.00
+quantity.OnNext(3);   // Total: £45.00
+price.OnNext(12m);    // Total: £36.00
+quantity.OnNext(0);   // Total: £0.00</code></pre>
+		</div>
+
+		<div class="info-box warn" style="margin:0 1rem .6rem;">
+			<span class="info-box-icon">⚠️</span>
+			<div class="info-box-content">
+				<p>
+					<code>CombineLatest</code> does <strong>not</strong> emit until every source has
+					produced at least one value. Use <code>BehaviorSubject</code> (which holds an
+					initial value) to get an immediate combination.
+				</p>
+			</div>
+		</div>
+
+		<!-- Interactive demo -->
+		<div style="padding:0 1rem .8rem;">
+			<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem;">
+				Interactive — adjust the sliders and watch the total update live:
+			</p>
+			<div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:.5rem;">
+				<label style="font-size:.82rem;">
+					💰 Price: <strong>@_clPrice.ToString("C2")</strong>
+					<input type="range" min="1" max="50" step="1"
+						   value="@((int)_clPrice)"
+						   @oninput="e => OnCLPriceChange(e)"
+						   style="display:block;width:160px;" />
+				</label>
+				<label style="font-size:.82rem;">
+					📦 Qty: <strong>@_clQty</strong>
+					<input type="range" min="0" max="20" step="1"
+						   value="@_clQty"
+						   @oninput="e => OnCLQtyChange(e)"
+						   style="display:block;width:160px;" />
+				</label>
+			</div>
+		</div>
+
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>Live CombineLatest output</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_clOut)
+			</div>
+		</div>
+	</div>
+
+	<!-- ── StartWith ──────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">StartWith</span>
+		</div>
+		<p class="operator-desc">
+			Prepends one or more seed values to the source sequence before any values from the
+			source are emitted. Great for providing an initial UI state.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Seed values always emitted first</span>
+			</div>
+			<pre><code class="language-csharp">// Prepend a loading placeholder before real data arrives
+IObservable&lt;string&gt; liveData =
+	new[] { "Record A", "Record B", "Record C" }.ToObservable();
+
+liveData.StartWith("⏳ Loading…")
+		.Subscribe(Console.WriteLine);
+
+// ⏳ Loading…, Record A, Record B, Record C
+
+// Multiple seed values
+Observable.Range(4, 3)
+		  .StartWith(1, 2, 3)    // prepend 1,2,3 before 4,5,6
+		  .Subscribe(Console.WriteLine);
+
+// 1, 2, 3, 4, 5, 6</code></pre>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunStartWith" disabled="@_startWithRunning">
+				@if (_startWithRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+				Run (2 demos)
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_startWithOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>Output</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_startWithOut)
+			</div>
+		</div>
+	</div>
+
+	<!-- ── WithLatestFrom ─────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">WithLatestFrom</span>
+		</div>
+		<p class="operator-desc">
+			Emits from the <em>primary</em> source and pairs each value with the most recent
+			value from a secondary source. The secondary source <em>never drives output</em>.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Primary drives output — secondary only sampled</span>
+			</div>
+			<pre><code class="language-csharp">// Simulate a button click stream (primary)
+var clicks  = new Subject&lt;string&gt;();
+
+// Simulate a continuously updating sensor reading (secondary)
+var reading = new BehaviorSubject&lt;double&gt;(0.0);
+
+// Only emit when a CLICK happens — sample sensor at that moment
+clicks.WithLatestFrom(reading, (click, value) =&gt; $"{click} captured sensor={value:F2}")
+	  .Subscribe(Console.WriteLine);
+
+reading.OnNext(1.23);   // sensor updates — nothing emitted
+reading.OnNext(4.56);   // sensor updates — nothing emitted
+clicks.OnNext("Click"); // → "Click captured sensor=4.56"
+reading.OnNext(7.89);   // sensor updates — nothing emitted
+clicks.OnNext("Click"); // → "Click captured sensor=7.89"</code></pre>
+		</div>
+
+		<!-- Interactive demo -->
+		<div style="padding:0 1rem .8rem;">
+			<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem;">
+				Interactive — move the slider (secondary) then click <em>Sample Now</em> (primary):
+			</p>
+			<div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">
+				<label style="font-size:.82rem;">
+					📡 Sensor: <strong>@_wlfSensor.ToString("F2")</strong>
+					<input type="range" min="0" max="100" step="0.5"
+						   value="@_wlfSensor"
+						   @oninput="e => _wlfSensor = double.Parse(e.Value!.ToString()!)"
+						   style="display:block;width:150px;" />
+				</label>
+				<button class="btn btn-primary btn-sm" @onclick="WlfSampleNow">
+					🖱 Sample Now
+				</button>
+			</div>
+		</div>
+
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>WithLatestFrom output (click samples sensor)</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_wlfOut)
+			</div>
+		</div>
+	</div>
+
+	<!-- ── Amb ────────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">Amb (Ambiguous)</span>
+		</div>
+		<p class="operator-desc">
+			Subscribes to all sources simultaneously; the moment the <em>first</em> one emits,
+			it wins — all others are unsubscribed and ignored. Perfect for racing redundant
+			data sources.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Race pattern — fastest source wins</span>
+			</div>
+			<pre><code class="language-csharp">IObservable&lt;string&gt; MakeSource(string name, int delayMs) =&gt;
+	Observable.Timer(TimeSpan.FromMilliseconds(delayMs))
+			  .Select(_ =&gt; $"{name} responded in {delayMs}ms");
+
+var primary  = MakeSource("Primary CDN",  200);
+var fallback = MakeSource("Fallback CDN", 500);
+var cache    = MakeSource("Edge Cache",   100);  // ← fastest
+
+// Only the first to emit is forwarded; others are disposed
+Observable.Amb(primary, fallback, cache)
+		  .Subscribe(winner =&gt; Console.WriteLine($"Winner: {winner}"));
+
+// Winner: Edge Cache responded in 100ms
+
+// Also works as an extension method on two sources:
+primary.Amb(fallback)
+	   .Subscribe(Console.WriteLine);</code></pre>
+		</div>
+
+		<div class="info-box info" style="margin:0 1rem .6rem;">
+			<span class="info-box-icon">ℹ️</span>
+			<div class="info-box-content">
+				<p>
+					The demo races three sources with random delays (0–600 ms each).
+					Run it multiple times — the winner changes!
+				</p>
+			</div>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunAmb" disabled="@_ambRunning">
+				@if (_ambRunning) { <span class="spinner"></span> } else { <span>🏁</span> }
+				Race!
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_ambOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>Race output</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_ambOut)
+			</div>
+		</div>
+	</div>
+
+	<!-- ── ForkJoin / WhenAll ─────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">ForkJoin / Task.WhenAll equivalent</span>
+		</div>
+		<p class="operator-desc">
+			Waits for <em>all</em> sources to complete then emits a single array of the
+			<em>last</em> value from each — the Rx equivalent of <code>Task.WhenAll</code>.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Parallel async calls — combine when all finish</span>
+			</div>
+			<pre><code class="language-csharp">static IObservable&lt;string&gt; FetchUser(int id) =&gt;
+	Observable.FromAsync(async () =&gt;
+	{
+		await Task.Delay(id * 100);   // simulate varying latency
+		return $"User{id}";
+	});
+
+// Fire all requests concurrently; collect when all finish
+Observable.ForkJoin(FetchUser(1), FetchUser(2), FetchUser(3))
+		  .Subscribe(results =&gt;
+		  {
+			  foreach (var r in results)
+				  Console.WriteLine(r);
+		  });
+
+// User1, User2, User3  (always in source order, not arrival order)
+
+// Two-source overload with result selector:
+FetchUser(1).ForkJoin(FetchUser(2),
+					  (u1, u2) =&gt; $"{u1} + {u2}")
+			.Subscribe(Console.WriteLine);
+// User1 + User2</code></pre>
+		</div>
+
+		<div class="info-box warn" style="margin:0 1rem .6rem;">
+			<span class="info-box-icon">⚠️</span>
+			<div class="info-box-content">
+				<p>
+					If any source errors, <code>ForkJoin</code> immediately propagates the error.
+					If a source completes <em>without</em> emitting a value, the result for that
+					slot is <code>default(T)</code>.
+				</p>
+			</div>
+		</div>
+
+		<div class="btn-group">
+			<button class="btn btn-primary btn-sm" @onclick="RunForkJoin" disabled="@_forkJoinRunning">
+				@if (_forkJoinRunning) { <span class="spinner"></span> } else { <span>▶</span> }
+				Run parallel fetches
+			</button>
+			<button class="btn btn-outline btn-sm" @onclick="() => ClearOutput(_forkJoinOut)">Clear</button>
+		</div>
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>ForkJoin output</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_forkJoinOut)
+			</div>
+		</div>
+	</div>
+
+	<!-- ── Switch ────────────────────────────────────────────────────── -->
+	<div class="operator-card">
+		<div class="operator-card-header">
+			<span class="tag tag-combo">Combination</span>
+			<span class="operator-name">Switch / SwitchMap</span>
+		</div>
+		<p class="operator-desc">
+			Each time the outer observable emits, <code>Switch</code> (also called
+			<code>SwitchMap</code> in RxJS) <em>disposes</em> the previous inner subscription
+			and subscribes to the new one. Essential for type-ahead search — cancels
+			in-flight requests automatically.
+		</p>
+
+		<div class="code-block">
+			<div class="code-block-header">
+				<span class="code-lang-badge">C#</span>
+				<span>Cancel previous inner sequence on each outer emit</span>
+			</div>
+			<pre><code class="language-csharp">// Outer: search terms typed by user
+var searchTerms = new Subject&lt;string&gt;();
+
+// Inner: simulate an HTTP search (variable latency)
+IObservable&lt;string&gt; Search(string term) =&gt;
+	Observable.FromAsync(async () =&gt;
+	{
+		await Task.Delay(300);    // network latency
+		return $"Results for '{term}'";
+	});
+
+// Switch() automatically cancels the previous Search()
+// when a new term arrives — prevents stale responses
+searchTerms
+	.Throttle(TimeSpan.FromMilliseconds(250))   // debounce typing
+	.DistinctUntilChanged()
+	.Select(term =&gt; Search(term))
+	.Switch()                                   // ← key operator
+	.Subscribe(result =&gt; Console.WriteLine(result));
+
+searchTerms.OnNext("rx");        // starts Search("rx")
+searchTerms.OnNext("rx.n");      // cancels "rx", starts Search("rx.n")
+searchTerms.OnNext("rx.net");    // cancels "rx.n", starts Search("rx.net")
+// Only "rx.net" result arrives (others cancelled)</code></pre>
+		</div>
+
+		<!-- Interactive demo -->
+		<div style="padding:0 1rem .8rem;">
+			<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem;">
+				Interactive — type quickly to see cancellation in action (250 ms debounce):
+			</p>
+			<input class="recipe-input"
+				   placeholder="Type a search term…"
+				   @oninput="OnSwitchSearchInput" />
+		</div>
+
+		<div class="output-console">
+			<div class="output-console-header">
+				<div>
+					<span class="output-dot dot-red"></span>
+					<span class="output-dot dot-yellow"></span>
+					<span class="output-dot dot-green"></span>
+				</div>
+				<span>Switch output — only latest request completes</span>
+			</div>
+			<div class="output-console-body">
+				@ConsoleBody(_switchOut)
+			</div>
+		</div>
+	</div>
+
+</div>
+
+@code {
+	// ── Shared helpers ────────────────────────────────────────────────────────
+	private record OutputLine(string Text, string Css);
+
+	private RenderFragment ConsoleBody(List<OutputLine> lines) => builder =>
+	{
+		if (lines.Count == 0)
+		{
+			builder.OpenElement(0, "div");
+			builder.AddAttribute(1, "class", "output-empty");
+			builder.AddContent(2, "Press Run to execute…");
+			builder.CloseElement();
+		}
+		else
+		{
+			int seq = 0;
+			foreach (var line in lines)
+			{
+				builder.OpenElement(seq++, "div");
+				builder.AddAttribute(seq++, "class", $"output-line {line.Css}");
+				builder.OpenElement(seq++, "span");
+				builder.AddAttribute(seq++, "class", "output-prompt");
+				builder.AddContent(seq++, "›");
+				builder.CloseElement();
+				builder.OpenElement(seq++, "span");
+				builder.AddContent(seq++, line.Text);
+				builder.CloseElement();
+				builder.CloseElement();
+			}
+		}
+	};
+
+	private void ClearOutput(List<OutputLine> list) { list.Clear(); StateHasChanged(); }
+
+	private void Add(List<OutputLine> list, string text, string css = "value")
+	{
+		list.Add(new(text, css));
+		StateHasChanged();
+	}
+
+	// ── Merge ─────────────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _mergeOut = [];
+	private bool _mergeRunning;
+
+	private async Task RunMerge()
+	{
+		_mergeRunning = true;
+		_mergeOut.Clear();
+		StateHasChanged();
+
+		var sourceA = Observable.Interval(TimeSpan.FromMilliseconds(300))
+								.Take(4)
+								.Select(i => $"A{i}");
+
+		var sourceB = Observable.Interval(TimeSpan.FromMilliseconds(500))
+								.Take(3)
+								.Select(i => $"B{i}");
+
+		Add(_mergeOut, "Starting A (every 300 ms × 4) and B (every 500 ms × 3)…", "info");
+
+		await sourceA.Merge(sourceB)
+					 .Do(v => Add(_mergeOut, $"Next: {v}", v.StartsWith('A') ? "value" : "complete"))
+					 .ToList();
+
+		Add(_mergeOut, "Merge completed ✓", "complete");
+		_mergeRunning = false;
+		StateHasChanged();
+	}
+
+	// ── Concat ────────────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _concatOut = [];
+	private bool _concatRunning;
+
+	private async Task RunConcat()
+	{
+		_concatRunning = true;
+		_concatOut.Clear();
+		StateHasChanged();
+
+		var first  = Observable.Range(1, 3).Select(i => $"First-{i}");
+		var second = Observable.Range(1, 3).Select(i => $"Second-{i}");
+		var third  = Observable.Range(1, 2).Select(i => $"Third-{i}");
+
+		Add(_concatOut, "Subscribing to first…", "info");
+
+		await first.Concat(second).Concat(third)
+				   .Do(v =>
+				   {
+					   var css = v.StartsWith("First") ? "value"
+							   : v.StartsWith("Second") ? "complete"
+							   : "info";
+					   Add(_concatOut, $"Next: {v}", css);
+				   })
+				   .ToList();
+
+		Add(_concatOut, "All sources completed ✓", "complete");
+		_concatRunning = false;
+		StateHasChanged();
+	}
+
+	// ── Zip ───────────────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _zipOut = [];
+	private bool _zipRunning;
+
+	private async Task RunZip()
+	{
+		_zipRunning = true;
+		_zipOut.Clear();
+		StateHasChanged();
+
+		var numbers = Observable.Range(1, 5);
+		var letters = new[] { "A", "B", "C", "D", "E" }.ToObservable();
+		var symbols = new[] { "!", "@", "#", "$", "%" }.ToObservable();
+
+		Add(_zipOut, "— numbers.Zip(letters) —", "info");
+		await numbers.Zip(letters, (n, l) => $"{n}-{l}")
+					 .Do(v => Add(_zipOut, $"Next: {v}"))
+					 .ToList();
+
+		Add(_zipOut, "— Observable.Zip(numbers, letters, symbols) —", "info");
+		await Observable.Zip(numbers, letters, symbols, (n, l, s) => $"{n}{l}{s}")
+						.Do(v => Add(_zipOut, $"Next: {v}"))
+						.ToList();
+
+		Add(_zipOut, "— Range(1,10).Zip(letters) — stops at shorter source —", "info");
+		await Observable.Range(1, 10)
+						.Zip(letters, (n, l) => $"{n}-{l}")
+						.Do(v => Add(_zipOut, $"Next: {v}"))
+						.ToList();
+
+		Add(_zipOut, "Zip completed ✓", "complete");
+		_zipRunning = false;
+		StateHasChanged();
+	}
+
+	// ── CombineLatest ─────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _clOut = [];
+	private decimal _clPrice = 10m;
+	private int     _clQty   = 1;
+	private readonly BehaviorSubject<decimal> _clPriceSubject = new(10m);
+	private readonly BehaviorSubject<int>     _clQtySubject   = new(1);
+	private IDisposable? _clSubscription;
+
+	private void InitCombineLatest()
+	{
+		_clSubscription = _clPriceSubject
+			.CombineLatest(_clQtySubject, (p, q) => (Price: p, Qty: q, Total: p * q))
+			.Subscribe(x =>
+			{
+				_clOut.Add(new($"Price={x.Price:C2}  ×  Qty={x.Qty}  =  {x.Total:C2}", "value"));
+				if (_clOut.Count > 12) _clOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			});
+	}
+
+	private void OnCLPriceChange(ChangeEventArgs e)
+	{
+		if (int.TryParse(e.Value?.ToString(), out var v))
+		{
+			_clPrice = v;
+			_clPriceSubject.OnNext(_clPrice);
+		}
+	}
+
+	private void OnCLQtyChange(ChangeEventArgs e)
+	{
+		if (int.TryParse(e.Value?.ToString(), out var v))
+		{
+			_clQty = v;
+			_clQtySubject.OnNext(_clQty);
+		}
+	}
+
+	// ── StartWith ─────────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _startWithOut = [];
+	private bool _startWithRunning;
+
+	private async Task RunStartWith()
+	{
+		_startWithRunning = true;
+		_startWithOut.Clear();
+		StateHasChanged();
+
+		Add(_startWithOut, "— liveData.StartWith(\"⏳ Loading…\") —", "info");
+		var liveData = new[] { "Record A", "Record B", "Record C" }.ToObservable();
+		await liveData.StartWith("⏳ Loading…")
+					  .Do(v => Add(_startWithOut, $"Next: {v}", v.StartsWith('⏳') ? "info" : "value"))
+					  .ToList();
+
+		Add(_startWithOut, "— Range(4,3).StartWith(1, 2, 3) —", "info");
+		await Observable.Range(4, 3)
+						.StartWith(1, 2, 3)
+						.Do(v => Add(_startWithOut, $"Next: {v}", v <= 3 ? "info" : "value"))
+						.ToList();
+
+		Add(_startWithOut, "StartWith completed ✓", "complete");
+		_startWithRunning = false;
+		StateHasChanged();
+	}
+
+	// ── WithLatestFrom ────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _wlfOut = [];
+	private double _wlfSensor = 42.0;
+	private int    _wlfClickCount;
+	private readonly Subject<int>            _wlfClicks  = new();
+	private readonly BehaviorSubject<double> _wlfReading = new(42.0);
+	private IDisposable? _wlfSubscription;
+
+	private void InitWithLatestFrom()
+	{
+		_wlfSubscription = _wlfClicks
+			.WithLatestFrom(_wlfReading, (click, sensor) =>
+				$"Click #{click} — sensor snapshot = {sensor:F2}")
+			.Subscribe(msg =>
+			{
+				_wlfOut.Add(new(msg, "value"));
+				if (_wlfOut.Count > 8) _wlfOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			});
+	}
+
+	private void WlfSampleNow()
+	{
+		_wlfReading.OnNext(_wlfSensor);
+		_wlfClicks.OnNext(++_wlfClickCount);
+	}
+
+	// ── Amb ───────────────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _ambOut = [];
+	private bool _ambRunning;
+	private readonly Random _rng = new();
+
+	private async Task RunAmb()
+	{
+		_ambRunning = true;
+		_ambOut.Clear();
+		StateHasChanged();
+
+		int delayA = _rng.Next(50, 600);
+		int delayB = _rng.Next(50, 600);
+		int delayC = _rng.Next(50, 600);
+
+		Add(_ambOut, $"Racing: Primary({delayA}ms)  Fallback({delayB}ms)  Cache({delayC}ms)", "info");
+
+		IObservable<string> MakeSource(string name, int ms) =>
+			Observable.Timer(TimeSpan.FromMilliseconds(ms))
+					  .Select(_ => $"{name} — responded in {ms} ms");
+
+		var winner = await Observable
+			.Amb(MakeSource("🔵 Primary", delayA),
+				 MakeSource("🟡 Fallback", delayB),
+				 MakeSource("🟢 Cache",   delayC))
+			.FirstAsync();
+
+		Add(_ambOut, $"Winner: {winner}", "complete");
+		Add(_ambOut, "Other sources discarded ✓", "info");
+
+		_ambRunning = false;
+		StateHasChanged();
+	}
+
+	// ── ForkJoin ──────────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _forkJoinOut = [];
+	private bool _forkJoinRunning;
+
+	private async Task RunForkJoin()
+	{
+		_forkJoinRunning = true;
+		_forkJoinOut.Clear();
+		StateHasChanged();
+
+		static IObservable<string> FetchUser(int id) =>
+			Observable.FromAsync(async () =>
+			{
+				await Task.Delay(id * 120);
+				return $"User{id} (latency {id * 120}ms)";
+			});
+
+		Add(_forkJoinOut, "Firing 3 parallel requests…", "info");
+		var sw = System.Diagnostics.Stopwatch.StartNew();
+
+		var t1 = FetchUser(1).ToTask();
+		var t2 = FetchUser(2).ToTask();
+		var t3 = FetchUser(3).ToTask();
+		var results = await Task.WhenAll(t1, t2, t3);
+
+		sw.Stop();
+		foreach (var r in results)
+			Add(_forkJoinOut, $"Result: {r}");
+
+		Add(_forkJoinOut, $"All completed in {sw.ElapsedMilliseconds}ms (max latency was 360ms) ✓", "complete");
+
+		Add(_forkJoinOut, "— Two-source overload with result selector —", "info");
+		var t1b = FetchUser(1).ToTask();
+		var t3b = FetchUser(3).ToTask();
+		await Task.WhenAll(t1b, t3b);
+		var combined = $"{t1b.Result.Split(' ')[0]} + {t3b.Result.Split(' ')[0]}";
+		Add(_forkJoinOut, $"Combined: {combined}");
+
+		_forkJoinRunning = false;
+		StateHasChanged();
+	}
+
+	// ── Switch ────────────────────────────────────────────────────────────────
+	private readonly List<OutputLine> _switchOut   = [];
+	private readonly Subject<string>  _switchTerms = new();
+	private int      _switchReqNum;
+	private IDisposable? _switchSubscription;
+
+	private void InitSwitch()
+	{
+		_switchSubscription = _switchTerms
+			.Throttle(TimeSpan.FromMilliseconds(250))
+			.DistinctUntilChanged()
+			.Do(term =>
+			{
+				_switchOut.Add(new($"Searching for '{term}'…", "info"));
+				if (_switchOut.Count > 12) _switchOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			})
+			.Select(term =>
+			{
+				int req = ++_switchReqNum;
+				return Observable.FromAsync(async () =>
+				{
+					await Task.Delay(300);
+					return (term, req);
+				});
+			})
+			.Switch()
+			.Subscribe(x =>
+			{
+				_switchOut.Add(new($"✅ Result #{x.req}: results for '{x.term}'", "value"));
+				if (_switchOut.Count > 12) _switchOut.RemoveAt(0);
+				InvokeAsync(StateHasChanged);
+			});
+	}
+
+	private void OnSwitchSearchInput(ChangeEventArgs e) =>
+		_switchTerms.OnNext(e.Value?.ToString() ?? "");
+
+	// ── Lifecycle ─────────────────────────────────────────────────────────────
+	private readonly CompositeDisposable _subs = new();
+
+	protected override void OnInitialized()
+	{
+		InitCombineLatest();
+		InitWithLatestFrom();
+		InitSwitch();
+
+		if (_clSubscription     is not null) _subs.Add(_clSubscription);
+		if (_wlfSubscription    is not null) _subs.Add(_wlfSubscription);
+		if (_switchSubscription is not null) _subs.Add(_switchSubscription);
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+			await JS.InvokeVoidAsync("highlightCode");
+	}
+
+	public void Dispose() => _subs.Dispose();
+}

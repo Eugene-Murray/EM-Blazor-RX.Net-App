@@ -1,0 +1,73 @@
+@page "/operators"
+@inject IJSRuntime JS
+
+<PageTitle>Operators — Rx.NET in Blazor</PageTitle>
+
+<div class="page-header">
+<div class="page-header-badge">⚡ Reference</div>
+<h1>Rx.NET Operators</h1>
+<p class="lead">
+A comprehensive, interactive reference for Rx.NET operators — each with a runnable live demo
+inside the browser. Select a category below to filter.
+</p>
+</div>
+
+<!-- ── Sticky category tabs ─────────────────────────────────────────────── -->
+<div class="category-tabs">
+@foreach (var cat in _categories)
+{
+<button class="cat-tab @(cat == _active ? "active" : "")"
+@onclick="() => SetCategory(cat)">
+@cat
+</button>
+}
+</div>
+
+<!-- ── Category components ──────────────────────────────────────────────── -->
+@if (_active is "All" or "Creation")
+{
+<CreationOperators />
+}
+
+@if (_active is "All" or "Transformation")
+{
+<TransformationOperators />
+}
+
+@if (_active is "All" or "Filtering")
+{
+<FilteringOperators />
+}
+
+@if (_active is "All" or "Combination")
+{
+<CombinationOperators />
+}
+
+@if (_active is "All" or "Error Handling")
+{
+<ErrorHandlingOperators />
+}
+
+@if (_active is "All" or "Utility")
+{
+<UtilityOperators />
+}
+
+@if (_active is "All" or "Multicast")
+{
+<MulticastOperators />
+}
+
+@code {
+private static readonly string[] _categories =
+["All", "Creation", "Transformation", "Filtering", "Combination", "Error Handling", "Utility", "Multicast"];
+
+private string _active = "All";
+
+private void SetCategory(string cat)
+{
+_active = cat;
+_ = JS.InvokeVoidAsync("highlightCode");
+}
+}
